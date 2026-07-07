@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>화학 통합 시뮬레이터 — 반응속도 · 평형 · 자유에너지</title>
+<style>
+  :root{
+    --ink:#1a2e2a;
+    --ink-soft:#52605c;
+    --ink-faint:#8a948f;
+    --paper:#f3f0e7;
+    --surface:#ffffff;
+    --line:#dcd8cc;
+    --line-soft:#e8e4d8;
+    --A:#2f7dd1;
+    --B:#1d9e75;
+    --C:#d85a30;
+    --energy:#6b5dd3;
+    --accent:#c24a1f;
+    --grid:#ece8dc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px;}
+
+  /* Header */
+  header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    gap:20px;padding-bottom:18px;margin-bottom:20px;
+    border-bottom:2px solid var(--ink);flex-wrap:wrap;
+  }
+  .title-block h1{
+    font-size:clamp(22px,3vw,30px);font-weight:700;letter-spacing:-0.02em;
+    line-height:1.1;
+  }
+  .title-block .rxn{
+    font-family:'Georgia',serif;font-size:18px;color:var(--accent);
+    margin-top:6px;font-style:italic;
+  }
+  .title-block .sub{font-size:13px;color:var(--ink-soft);margin-top:4px;}
+  .status-chip{
+    font-size:12px;color:var(--ink-soft);background:var(--surface);
+    border:1px solid var(--line);border-radius:20px;padding:6px 14px;
+    display:flex;align-items:center;gap:8px;white-space:nowrap;
+  }
+  .status-chip .dot{width:8px;height:8px;border-radius:50%;background:var(--B);
+    animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  /* Controls */
+  .controls{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:16px 18px;margin-bottom:16px;
+    display:grid;grid-template-columns:1.4fr auto;gap:20px;align-items:center;
+  }
+  @media(max-width:760px){.controls{grid-template-columns:1fr;}}
+  .controls-2col{grid-template-columns:1fr 1fr;}
+  .temp-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .temp-row label{font-size:13px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
+  .temp-row input[type=range]{flex:1;min-width:120px;accent-color:var(--accent);height:5px;}
+  .temp-val{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;min-width:62px;text-align:right;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+  button.act{
+    font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    border-radius:9px;padding:9px 14px;display:inline-flex;align-items:center;gap:6px;
+    transition:all .15s ease;
+  }
+  button.act:hover{background:var(--paper);border-color:var(--ink-faint);}
+  button.act:active{transform:scale(.96);}
+  button.add-a{border-color:var(--A);color:var(--A);}
+  button.add-a:hover{background:rgba(47,125,209,.08);}
+  button.add-b{border-color:var(--B);color:var(--B);}
+  button.add-b:hover{background:rgba(29,158,117,.08);}
+  button.add-c{border-color:var(--C);color:var(--C);}
+  button.add-c:hover{background:rgba(216,90,48,.08);}
+  button.play{border-color:var(--ink);color:var(--ink);}
+
+  /* Simulation hero */
+  .sim-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px 12px;margin-bottom:16px;position:relative;overflow:hidden;
+  }
+  .card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:10px;gap:12px;flex-wrap:wrap;
+  }
+  .card-head .lbl{font-size:13px;font-weight:700;letter-spacing:.01em;
+    display:flex;align-items:center;gap:7px;}
+  .card-head .lbl .tag{
+    font-size:10px;font-weight:700;color:var(--accent);background:rgba(194,74,31,.1);
+    padding:2px 7px;border-radius:5px;letter-spacing:.03em;
+  }
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--ink-soft);}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .counts{font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-soft);}
+  #simCanvas{display:block;width:100%;height:auto;border-radius:8px;
+    background:#fbfaf5;border:1px solid var(--line-soft);}
+
+  /* Graph grid */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:760px){.grid{grid-template-columns:1fr;}}
+  .panel{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px 10px;
+  }
+  .panel .ph{font-size:13px;font-weight:700;margin-bottom:3px;
+    display:flex;align-items:center;gap:7px;}
+  .panel .pd{font-size:11.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4;}
+  .panel canvas{display:block;width:100%;height:auto;}
+  .readout{font-variant-numeric:tabular-nums;font-size:11px;color:var(--ink-soft);
+    margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;}
+  .readout b{color:var(--ink);font-weight:700;}
+
+  footer{margin-top:28px;text-align:center;font-size:11.5px;color:var(--ink-faint);
+    line-height:1.6;}
+  .icn{width:16px;height:16px;display:inline-block;vertical-align:-3px;}
+
+  /* 반응형: 좁은 화면 대응 (반드시 base 규칙들 뒤에 위치해 우선 적용됨) */
+  @media(max-width:640px){
+    .controls-2col{grid-template-columns:1fr;}
+  }
+  @media(max-width:480px){
+    .wrap{padding:16px 12px 40px;}
+    h1{font-size:19px;}
+    .temp-row input[type=range]{min-width:80px;flex:1 1 80px;}
+    .btn-row{justify-content:flex-start;}
+    button.act{padding:8px 10px;font-size:12px;}
+    #customRow{padding:10px;}
+    #customRow input[type=text],#customRow input[type=number]{width:48px !important;}
+    #customRow select,#presetSel{min-width:0;width:100%;}
+    .card-head{flex-direction:column;align-items:flex-start;gap:8px;}
+    .legend{gap:10px;flex-wrap:wrap;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>화학 통합 시뮬레이터</h1>
+      <div class="rxn" id="headerRxn">A + B &#8652; C</div>
+      <div class="sub">분자 운동 · 반응속도 · 화학평형 · 자유에너지를 하나의 화면에서</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+      <div class="status-chip"><span class="dot"></span><span id="statusText">시뮬레이션 실행 중</span></div>
+      <button class="act" id="btnShare" style="font-size:12px;padding:6px 12px;"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:14px;height:14px;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>공유 링크</button>
+    </div>
+  </header>
+
+  <!-- Reaction selector & thermodynamic inputs -->
+  <div class="controls" style="grid-template-columns:1fr;gap:12px;">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <label style="font-size:13px;color:var(--ink-soft);font-weight:600;white-space:nowrap;">반응</label>
+      <select id="presetSel" style="font-family:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:220px;">
+        <option value="generic">일반 모델 반응 (A + B ⇌ C, 발열)</option>
+        <option value="endo">일반 흡열 반응 (A + B ⇌ C, 흡열)</option>
+        <option value="haber">하버–보슈법 (N₂ + 3H₂ ⇌ 2NH₃)</option>
+        <option value="n2o4">N₂O₄ 분해 (N₂O₄ ⇌ 2NO₂)</option>
+        <option value="custom">✎ 사용자 정의 (직접 입력)</option>
+      </select>
+      <span id="rxnEq" style="font-family:Georgia,serif;font-style:italic;font-size:16px;color:var(--accent);"></span>
+    </div>
+
+    <!-- 사용자 정의 입력 행 -->
+    <div id="customRow" style="display:none;flex-direction:column;gap:10px;padding:12px;border:1px dashed var(--line);border-radius:10px;background:#faf8f1;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;">
+        <span style="color:var(--ink-soft);font-weight:600;margin-right:4px;">반응식</span>
+        <input type="number" id="cfA" value="1" min="1" max="4" style="width:46px;font-family:inherit;font-size:13px;padding:5px;border:1px solid var(--line);border-radius:6px;text-align:center;">
+        <input type="text" id="nmA" value="A" maxlength="6" style="width:62px;font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--A);border-radius:6px;color:var(--A);font-weight:600;text-align:center;">
+        <span style="font-size:16px;color:var(--ink-faint);">+</span>
+        <input type="number" id="cfB" value="1" min="0" max="4" style="width:46px;font-family:inherit;font-size:13px;padding:5px;border:1px solid var(--line);border-radius:6px;text-align:center;">
+        <input type="text" id="nmB" value="B" maxlength="6" style="width:62px;font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--B);border-radius:6px;color:var(--B);font-weight:600;text-align:center;">
+        <span style="font-size:16px;color:var(--accent);">⇌</span>
+        <input type="number" id="cfC" value="1" min="1" max="4" style="width:46px;font-family:inherit;font-size:13px;padding:5px;border:1px solid var(--line);border-radius:6px;text-align:center;">
+        <input type="text" id="nmC" value="C" maxlength="6" style="width:62px;font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--C);border-radius:6px;color:var(--C);font-weight:600;text-align:center;">
+        <span style="font-size:11px;color:var(--ink-faint);">(B 계수를 0으로 하면 단일 반응물 분해)</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+        <span style="color:var(--ink-soft);font-weight:600;">초기농도</span>
+        <label style="color:var(--ink-soft);">[A]<input type="number" id="ic0" value="1.0" min="0" max="3" step="0.1" style="width:56px;margin-left:4px;font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;"></label>
+        <label style="color:var(--ink-soft);">[B]<input type="number" id="ic1" value="1.0" min="0" max="3" step="0.1" style="width:56px;margin-left:4px;font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;"></label>
+        <label style="color:var(--ink-soft);">[C]<input type="number" id="ic2" value="0.0" min="0" max="3" step="0.1" style="width:56px;margin-left:4px;font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;"></label>
+        <span style="color:var(--ink-faint);">— ΔH·ΔS·Ea는 아래 칸에서 설정</span>
+        <button class="act" id="btnApplyCustom" style="border-color:var(--accent);color:var(--accent);margin-left:auto;">반응 적용</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <span style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--ink-soft);">ΔH (kJ/mol)</label>
+        <input type="number" id="inpDH" step="1" style="width:80px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);">
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--ink-soft);">ΔS (J/mol·K)</label>
+        <input type="number" id="inpDS" step="1" style="width:80px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);">
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--ink-soft);">Ea (kJ/mol)</label>
+        <input type="number" id="inpEa" step="1" min="4" max="26" style="width:70px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);">
+      </span>
+      <span id="rxnNote" style="font-size:11.5px;color:var(--ink-faint);flex:1;min-width:200px;"></span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="temp-row">
+      <label for="tempSlider">온도 T</label>
+      <input type="range" id="tempSlider" min="200" max="600" value="300" step="5">
+      <span class="temp-val"><span id="tempVal">300</span> K</span>
+      <span id="gkBadge" title="ΔG° = ΔH − TΔS (표준상태 자유에너지, 반응지수 Q와 무관) · K = exp(−ΔG°/RT)" style="display:flex;align-items:center;gap:10px;font-size:12px;font-variant-numeric:tabular-nums;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:6px 12px;white-space:nowrap;cursor:help;">
+        <span>&#916;G&deg; = <b id="gkDG" style="font-weight:700;">—</b> kJ/mol</span>
+        <span style="color:var(--line);">|</span>
+        <span>K = <b id="gkK" style="font-weight:700;color:var(--ink);">—</b></span>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="act add-a" id="btnAddA"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="lblAddA">A 추가</span></button>
+      <button class="act add-b" id="btnAddB"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="lblAddB">B 추가</span></button>
+      <button class="act add-c" id="btnAddC"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="lblAddC">C 추가</span></button>
+      <button class="act play" id="btnPlay"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg><span id="playLabel">일시정지</span></button>
+      <button class="act" id="btnReset"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>리셋</button>
+    </div>
+  </div>
+
+  <!-- Catalyst & Volume sliders -->
+  <div class="controls controls-2col">
+    <div class="temp-row">
+      <label for="catSlider" title="활성화에너지를 낮추거나(정촉매) 높임(부촉매). 평형은 불변, 속도만 변함">촉매</label>
+      <span style="font-size:11px;color:var(--C);">정촉매</span>
+      <input type="range" id="catSlider" min="0.5" max="1.5" value="1.0" step="0.05">
+      <span style="font-size:11px;color:var(--ink-faint);">부촉매</span>
+      <span class="temp-val" style="min-width:78px;">Ea×<span id="catVal">1.00</span></span>
+    </div>
+    <div class="temp-row">
+      <label for="volSlider" title="부피를 바꿔 농도를 변화시킴 (르샤틀리에)">부피 V</label>
+      <span style="font-size:11px;color:var(--A);">압축</span>
+      <input type="range" id="volSlider" min="0.5" max="2.0" value="1.0" step="0.05">
+      <span style="font-size:11px;color:var(--ink-faint);">팽창</span>
+      <span class="temp-val" style="min-width:64px;"><span id="volVal">1.00</span> L</span>
+    </div>
+  </div>
+
+  <!-- Simulation hero -->
+  <div class="sim-card">
+    <div class="card-head">
+      <div class="lbl"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 0 0 20"/><ellipse cx="12" cy="12" rx="10" ry="4.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(120 12 12)"/></svg>분자 운동 시뮬레이션<span class="tag">실시간</span></div>
+      <div class="legend">
+        <span id="legWrapA"><i style="background:var(--A)"></i><span id="legA">A</span> <b id="cntA" style="font-weight:700">0</b></span>
+        <span id="legWrapB"><i style="background:var(--B)"></i><span id="legB">B</span> <b id="cntB" style="font-weight:700">0</b></span>
+        <span id="legWrapC"><i style="background:var(--C)"></i><span id="legC">C</span> <b id="cntC" style="font-weight:700">0</b></span>
+      </div>
+    </div>
+    <canvas id="simCanvas"></canvas>
+  </div>
+
+  <!-- Graph grid -->
+  <div class="grid">
+    <div class="panel">
+      <div class="ph"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M19 9l-5 5-4-4-3 3"/></svg>농도 — 시간</div>
+      <div class="pd">각 물질 농도가 시간에 따라 평형값으로 수렴합니다.</div>
+      <canvas id="concCanvas"></canvas>
+      <div class="readout">
+        <span id="roWrapA"><span id="rlA">[A]</span> <b id="roA">—</b></span>
+        <span id="roWrapB"><span id="rlB">[B]</span> <b id="roB">—</b></span>
+        <span id="roWrapC"><span id="rlC">[C]</span> <b id="roC">—</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4l4 4"/><path d="M17 8v12M17 20l4-4M17 20l-4-4"/></svg>정반응 vs 역반응 속도</div>
+      <div class="pd">두 속도가 같아지는 순간이 곧 평형 상태입니다.</div>
+      <canvas id="rateCanvas"></canvas>
+      <div class="readout">
+        <span>정반응 <b id="roVf">—</b></span>
+        <span>역반응 <b id="roVr">—</b></span>
+        <span id="eqFlag" style="color:var(--B);font-weight:700"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph" style="justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:7px;"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg><span id="gibbsTitle">자유에너지 곡선 (G vs &#958;)</span></span>
+        <button id="gibbsToggle" style="font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);border-radius:7px;padding:4px 9px;">엔트로피 분해 ▸</button>
+      </div>
+      <div class="pd" id="gibbsDesc">시스템은 자유에너지가 최소인 지점(평형)으로 굴러갑니다.</div>
+      <canvas id="gibbsCanvas"></canvas>
+      <div class="readout" id="gibbsReadout">
+        <span>&#916;G <b id="roDG">—</b></span>
+        <span>&#958; (진행도) <b id="roXi">—</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"/><path d="M4 20c2-12 6-14 8-14s6 2 8 14"/></svg>분자속도 분포 (맥스웰–볼츠만)</div>
+      <div class="pd">온도가 오르면 분포가 넓어져 Ea를 넘는 분자가 늘어납니다.</div>
+      <canvas id="mbCanvas"></canvas>
+      <div class="readout">
+        <span>Ea 초과 비율 <b id="roFrac">—</b></span>
+        <span>속도상수 k<sub>f</sub> <b id="roKf">—</b></span>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    온도를 올리면 평형 이동과 반응 속도 증가가 동시에 일어나는 것을 5개 화면에서 함께 확인하세요.<br>
+    <span style="color:var(--ink-faint);">※ ΔH·ΔS는 프리셋에 따라 실제 열역학 데이터를 쓰지만, 속도식(v=k[반응물]ⁿ)과 활성화에너지는
+    시각화를 위한 단순화 모델입니다. 실제 반응(특히 하버법)의 속도론은 이보다 훨씬 복잡하며,
+    Ea는 그래프에서 보이도록 실제보다 작게(4–26 kJ/mol) 설정되어 있습니다.</span>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   화학 통합 시뮬레이터
+   하나의 물리 엔진(공유 state) + 5개 뷰
+   반응: A + B  <=>  C   (발열반응, dH < 0)
+   ============================================================ */
+
+// ---------- 물리 상수 ----------
+const R = 8.314;            // 기체상수 J/mol·K
+const molMass = 0.030;      // 분자 평균 몰질량 kg/mol (MB 분포용, 시각화 고정)
+
+// ---------- 반응 프리셋 (실제 열역학 데이터) ----------
+// 일반형: a·A + b·B  ⇌  c·C   (b=0 이면 단일 반응물 분해)
+// dH: J/mol, dS: J/mol·K (반응 표준값) / Ea: J/mol (속도·MB용, 시각화 위해 조정)
+const PRESETS = {
+  generic: {
+    label:'일반 모델 반응', names:{A:'A',B:'B',C:'C'},
+    a:1,b:1,c:1, dH:-15000, dS:-30, Ea:12000, A_pre:120,
+    init:{A:1.0,B:1.0,C:0.0}, real:false,
+    note:'교육용 가상 반응 (발열·엔트로피 감소).'
+  },
+  haber: {
+    label:'하버–보슈법 (암모니아 합성)', names:{A:'N₂',B:'H₂',C:'NH₃'},
+    a:1,b:3,c:2, dH:-92200, dS:-198.7, Ea:20000, A_pre:300,
+    init:{A:0.6,B:1.8,C:0.0}, real:true,
+    note:'실제값 ΔH°=−92.2 kJ/mol, ΔS°=−198.7 J/mol·K. 발열·기체몰수 감소.'
+  },
+  n2o4: {
+    label:'N₂O₄ 분해', names:{A:'N₂O₄',B:'',C:'NO₂'},
+    a:1,b:0,c:2, dH:57200, dS:175.8, Ea:14000, A_pre:90,
+    init:{A:1.2,B:0.0,C:0.0}, real:true,
+    note:'실제값 ΔH°=+57.2 kJ/mol, ΔS°=+175.8 J/mol·K. 흡열·기체몰수 증가(대조군).'
+  },
+  endo: {
+    label:'일반 흡열 반응', names:{A:'A',B:'B',C:'C'},
+    a:1,b:1,c:1, dH:20000, dS:60, Ea:12000, A_pre:120,
+    init:{A:1.0,B:1.0,C:0.0}, real:false,
+    note:'교육용 흡열 반응 (ΔH>0). 고온일수록 정반응 자발 — 발열과 반대.'
+  },
+  custom: {
+    label:'사용자 정의', names:{A:'A',B:'B',C:'C'},
+    a:1,b:1,c:1, dH:-15000, dS:-30, Ea:12000, A_pre:120,
+    init:{A:1.0,B:1.0,C:0.0}, real:false,
+    note:'직접 입력한 반응. 계수·이름·초기농도·열역학값을 자유롭게 설정하세요.'
+  },
+};
+
+// 현재 반응 파라미터 (프리셋 복사본 — 사용자가 ΔH/ΔS/Ea 수정 가능)
+const rxn = Object.assign({}, PRESETS.generic);
+
+// ---------- 공유 상태(state) ----------
+const state = {
+  T: 300,                   // 온도 K
+  t: 0,                     // 경과 시간
+  cA: 1.0, cB: 1.0, cC: 0.0,// 농도 mol/L
+  V: 1.0,                   // 상대 부피 (르샤틀리에)
+  catMul: 1.0,              // 촉매: 유효 Ea 배율 (<1 정촉매, >1 부촉매)
+  running: true,
+  gibbsMode: 'curve',       // 'curve' | 'decomp'
+  history: [],
+  maxHistory: 240,
+};
+const VOL_MAX = 2.0;        // 부피 슬라이더 최대 (박스 최대 = 캔버스)
+
+// 촉매 반영 유효 활성화에너지 (평형 K는 불변, 속도만 변함)
+function eaEff(){ return Math.max(4000, Math.min(26000, rxn.Ea*state.catMul)); }
+
+// ---------- 열역학 / 속도론 (일반 화학량론) ----------
+function gibbsStd(T){ return rxn.dH - T*rxn.dS; }     // ΔG° = ΔH − TΔS
+function Keq(T){ return Math.exp(-gibbsStd(T)/(R*T)); }// K = exp(−ΔG°/RT)
+function kf(T){ return rxn.A_pre*Math.exp(-eaEff()/(R*T)); }
+function kr(T){ return kf(T)/Keq(T); }                 // 평형에서 vf=vr 보장
+// 질량작용 속도식 (화학량론 차수 — 단순화 모델)
+function vForward(s){ return kf(s.T)*Math.pow(Math.max(s.cA,0),rxn.a)*(rxn.b>0?Math.pow(Math.max(s.cB,0),rxn.b):1); }
+function vReverse(s){ return kr(s.T)*Math.pow(Math.max(s.cC,0),rxn.c); }
+
+// 반응지수 Q = [C]^c / ([A]^a [B]^b)
+function reactionQ(s){
+  const a=Math.pow(Math.max(s.cA,1e-6),rxn.a);
+  const b=rxn.b>0?Math.pow(Math.max(s.cB,1e-6),rxn.b):1;
+  const c=Math.pow(Math.max(s.cC,1e-9),rxn.c);
+  return c/(a*b);
+}
+function deltaG(s){ return gibbsStd(s.T)+R*s.T*Math.log(reactionQ(s)); }
+
+// ---------- ODE 한 스텝 (일반 화학량론, 반응진행도 ξ 기준) ----------
+function stepReaction(dt){
+  const r=(vForward(state)-vReverse(state))*dt;   // 반응 진행도 변화 dξ
+  // 농도가 음수가 되지 않도록 dξ 제한
+  let dxi=r;
+  if(dxi>0){
+    const lim=Math.min(state.cA/rxn.a, rxn.b>0?state.cB/rxn.b:Infinity);
+    dxi=Math.min(dxi,lim);
+  }else{
+    dxi=Math.max(dxi, -state.cC/rxn.c);
+  }
+  state.cA-=rxn.a*dxi;
+  if(rxn.b>0) state.cB-=rxn.b*dxi;
+  state.cC+=rxn.c*dxi;
+  state.cA=Math.max(0,state.cA);
+  state.cB=Math.max(0,state.cB);
+  state.cC=Math.max(0,state.cC);
+  // 입자 박스 이벤트 누적 (ξ 단위)
+  if(dxi>0) sim.pendingForm += dxi;
+  else if(dxi<0) sim.pendingBreak += -dxi;
+}
+
+// ---------- 입자 시스템 (시뮬레이션 박스) ----------
+const sim = {
+  canvas:null, ctx:null, W:0, H:0, dpr:1,
+  particles:[],   // {x,y,vx,vy,type}  type: 'A'|'B'|'C'
+  pendingForm:0,  // 정반응(결합)으로 만들 C 누적 농도
+  pendingBreak:0, // 역반응(분해)할 C 누적 농도
+  injectA:0, injectB:0, injectC:0,  // 버튼 주입 누적
+  fx:[],          // 결합/분해 플래시 {x,y,kind,age}
+};
+const PARTICLE_SCALE = 10;   // 농도 1.0 당 입자 수
+const PER = 1/PARTICLE_SCALE;// 입자 1개에 해당하는 농도(=진행도 1이벤트)
+const RADIUS = 5;
+const colorOf = {A:'#2f7dd1', B:'#1d9e75', C:'#d85a30'};
+// 입자 개수 = 물질량 n = 농도 × 부피 (부피만 변하면 개수 불변, 밀도만 변함)
+function nCount(c){ return Math.round(c*state.V*PARTICLE_SCALE); }
+
+function speedScale(T){ return 0.35*Math.sqrt(T/300); } // (호환용, 미사용)
+
+const BASE_SPEED = 120;   // 300K에서의 평균 속력 (px/s)
+function targetMeanSpeed(T){ return BASE_SPEED*Math.sqrt(T/300); } // 평균속력 ∝ √T
+
+// 현재 부피에 해당하는 박스 경계 (면적 ∝ V)
+function boxBounds(){
+  const s=Math.sqrt(state.V/VOL_MAX);
+  const w=sim.W*s, h=sim.H*s;
+  const x0=(sim.W-w)/2, y0=(sim.H-h)/2;
+  return {x0,y0,x1:x0+w,y1:y0+h};
+}
+
+function makeParticle(type){
+  // 속력에 분포를 부여 (모든 입자가 같은 속도가 되지 않도록)
+  const sp = targetMeanSpeed(state.T)*(0.4+Math.random()*1.2);
+  const ang = Math.random()*Math.PI*2;
+  const bb=boxBounds();
+  return {
+    x: bb.x0+RADIUS+Math.random()*Math.max(1,(bb.x1-bb.x0-2*RADIUS)),
+    y: bb.y0+RADIUS+Math.random()*Math.max(1,(bb.y1-bb.y0-2*RADIUS)),
+    vx: Math.cos(ang)*sp,
+    vy: Math.sin(ang)*sp,
+    type
+  };
+}
+
+// 특정 위치에 입자 생성
+function spawnAt(type,x,y){
+  const sp=targetMeanSpeed(state.T)*(0.4+Math.random()*1.2);
+  const ang=Math.random()*Math.PI*2;
+  const bb=boxBounds();
+  return {x:Math.max(bb.x0+RADIUS,Math.min(bb.x1-RADIUS,x)),
+          y:Math.max(bb.y0+RADIUS,Math.min(bb.y1-RADIUS,y)),
+          vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, type};
+}
+function firstIndexOf(type){
+  for(let i=0;i<sim.particles.length;i++) if(sim.particles[i].type===type) return i;
+  return -1;
+}
+function countOf(type){ let c=0; for(const p of sim.particles) if(p.type===type)c++; return c; }
+
+// n번째까지의 해당 type 입자 인덱스들을 모음
+function indicesOf(type,n){
+  const out=[];
+  for(let i=0;i<sim.particles.length && out.length<n;i++)
+    if(sim.particles[i].type===type) out.push(i);
+  return out;
+}
+function removeIndices(idxs){
+  idxs.slice().sort((p,q)=>q-p).forEach(i=>sim.particles.splice(i,1));
+}
+
+// 반응 이벤트 처리: 결합(정반응 aA+bB→cC), 분해(역반응 cC→aA+bB), 주입(버튼)
+const EVENT_BUDGET = 14;  // 프레임당 최대 결합/분해 이벤트 수 (반응이 빨라도 잔여는 다음 프레임에 이어서 처리)
+function processParticleEvents(){
+  const a=rxn.a, b=rxn.b, c=rxn.c;
+  // 1) 버튼 주입
+  while(sim.injectA>=PER){ sim.particles.push(makeParticle('A')); sim.injectA-=PER; }
+  while(sim.injectB>=PER){ sim.particles.push(makeParticle('B')); sim.injectB-=PER; }
+  while(sim.injectC>=PER){ sim.particles.push(makeParticle('C')); sim.injectC-=PER; }
+  // 2) 정반응 결합: a A + b B → c C
+  let budget=EVENT_BUDGET;
+  while(sim.pendingForm>=PER && budget>0){
+    const ai=indicesOf('A',a), bi=(b>0?indicesOf('B',b):[]);
+    if(ai.length<a || bi.length<b) break;
+    // 결합 위치 = 반응물들의 평균
+    let sx=0,sy=0,cnt=0;
+    for(const i of ai){ sx+=sim.particles[i].x; sy+=sim.particles[i].y; cnt++; }
+    for(const i of bi){ sx+=sim.particles[i].x; sy+=sim.particles[i].y; cnt++; }
+    const x=sx/cnt, y=sy/cnt;
+    removeIndices(ai.concat(bi));
+    for(let k=0;k<c;k++) sim.particles.push(spawnAt('C',x+(k-(c-1)/2)*8,y));
+    sim.fx.push({x,y,kind:'form',age:0});
+    sim.pendingForm-=PER; budget--;
+  }
+  // 3) 역반응 분해: c C → a A + b B
+  budget=EVENT_BUDGET;
+  while(sim.pendingBreak>=PER && budget>0){
+    const ci=indicesOf('C',c);
+    if(ci.length<c) break;
+    let sx=0,sy=0;
+    for(const i of ci){ sx+=sim.particles[i].x; sy+=sim.particles[i].y; }
+    const x=sx/c, y=sy/c;
+    removeIndices(ci);
+    for(let k=0;k<a;k++) sim.particles.push(spawnAt('A',x+(k-(a-1)/2)*8,y));
+    for(let k=0;k<b;k++) sim.particles.push(spawnAt('B',x+(k-(b-1)/2)*8,y+8));
+    sim.fx.push({x,y,kind:'break',age:0});
+    sim.pendingBreak-=PER; budget--;
+  }
+  // 4) 완만한 드리프트 보정 — 목표와 실제 개수 차이를 한번에 몰아서 맞추지 않고
+  //    프레임당 최대 2개씩만 조용히 조정한다 (반응이 지나치게 빠를 때 순간이동 방지).
+  //    남은 차이는 위 결합/분해 큐(pendingForm/pendingBreak)가 다음 프레임들에 걸쳐 자연히 처리한다.
+  const DRIFT_CAP=2;
+  const want={A:nCount(state.cA),
+              B:nCount(state.cB),
+              C:nCount(state.cC)};
+  for(const type of ['A','B','C']){
+    let have=countOf(type);
+    let n=Math.min(DRIFT_CAP, Math.max(0,want[type]-have));
+    while(n-->0){ sim.particles.push(makeParticle(type)); have++; }
+    n=Math.min(DRIFT_CAP, Math.max(0,have-want[type]));
+    while(n-->0){
+      const idx=firstIndexOf(type);
+      if(idx<0)break;
+      sim.particles.splice(idx,1); have--;
+    }
+  }
+}
+
+// 초기 입자 배치 (리셋/시작용)
+function syncParticles(){
+  sim.pendingForm=0; sim.pendingBreak=0;
+  sim.injectA=sim.injectB=sim.injectC=0; sim.fx=[];
+  const want={A:nCount(state.cA),
+              B:nCount(state.cB),
+              C:nCount(state.cC)};
+  for(const type of ['A','B','C']){
+    let have=countOf(type);
+    while(have<want[type]){ sim.particles.push(makeParticle(type)); have++; }
+    while(have>want[type]){ const idx=firstIndexOf(type); if(idx<0)break; sim.particles.splice(idx,1); have--; }
+  }
+}
+
+function updateParticles(dt){
+  // 앙상블 '평균' 속력만 목표(√T)로 부드럽게 맞춘다 — 개별 속력 차이(분포)는 보존
+  const n0=sim.particles.length;
+  if(n0>0){
+    let mean=0; for(const p of sim.particles) mean+=Math.hypot(p.vx,p.vy);
+    mean/=n0;
+    const target=targetMeanSpeed(state.T);
+    if(mean>1e-3){
+      const f=1+(target-mean)/mean*0.04;
+      for(const p of sim.particles){ p.vx*=f; p.vy*=f; }
+    }
+  }
+  const bb=boxBounds();
+  for(const p of sim.particles){
+    p.x += p.vx*dt;
+    p.y += p.vy*dt;
+    if(p.x<bb.x0+RADIUS){p.x=bb.x0+RADIUS;p.vx=Math.abs(p.vx);}
+    if(p.x>bb.x1-RADIUS){p.x=bb.x1-RADIUS;p.vx=-Math.abs(p.vx);}
+    if(p.y<bb.y0+RADIUS){p.y=bb.y0+RADIUS;p.vy=Math.abs(p.vy);}
+    if(p.y>bb.y1-RADIUS){p.y=bb.y1-RADIUS;p.vy=-Math.abs(p.vy);}
+  }
+  // 간단한 입자 간 충돌 (시각 효과)
+  const n=sim.particles.length;
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      const a=sim.particles[i], b=sim.particles[j];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const d2=dx*dx+dy*dy;
+      const min=2*RADIUS;
+      if(d2<min*min && d2>1e-6){
+        const d=Math.sqrt(d2);
+        const nx=dx/d, ny=dy/d;
+        const overlap=(min-d)/2;
+        a.x-=nx*overlap; a.y-=ny*overlap;
+        b.x+=nx*overlap; b.y+=ny*overlap;
+        // 속도 교환 (1D 탄성, 법선방향)
+        const va=a.vx*nx+a.vy*ny;
+        const vb=b.vx*nx+b.vy*ny;
+        const diff=vb-va;
+        a.vx+=diff*nx; a.vy+=diff*ny;
+        b.vx-=diff*nx; b.vy-=diff*ny;
+      }
+    }
+  }
+}
+
+function drawSim(dt){
+  const ctx=sim.ctx;
+  ctx.clearRect(0,0,sim.W,sim.H);
+  // 부피 박스 테두리 (압축/팽창 시각화)
+  const bb=boxBounds();
+  ctx.strokeStyle='#cfcabb';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.strokeRect(bb.x0,bb.y0,bb.x1-bb.x0,bb.y1-bb.y0);
+  ctx.setLineDash([]);
+  // 입자
+  for(const p of sim.particles){
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,RADIUS,0,Math.PI*2);
+    ctx.fillStyle=colorOf[p.type];
+    ctx.fill();
+  }
+  // 결합/분해 플래시 (확장하며 사라지는 링)
+  const LIFE=0.45;
+  for(let i=sim.fx.length-1;i>=0;i--){
+    const e=sim.fx[i];
+    e.age+=dt;
+    if(e.age>=LIFE){ sim.fx.splice(i,1); continue; }
+    const t=e.age/LIFE;
+    const r=RADIUS+t*16;
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,r,0,Math.PI*2);
+    ctx.lineWidth=2*(1-t);
+    // 결합=주황(C색), 분해=청록
+    ctx.strokeStyle = e.kind==='form'
+      ? 'rgba(216,90,48,'+(0.9*(1-t))+')'
+      : 'rgba(47,125,209,'+(0.9*(1-t))+')';
+    ctx.stroke();
+  }
+}
+
+// ---------- 그래프 헬퍼 ----------
+function setupCanvas(cv, cssH){
+  const dpr=window.devicePixelRatio||1;
+  const cssW=cv.clientWidth;
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  cv.style.height=cssH+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,W:cssW,H:cssH};
+}
+function axes(ctx,W,H,pad){
+  ctx.strokeStyle='#dcd8cc';ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(pad,6);ctx.lineTo(pad,H-pad);ctx.lineTo(W-6,H-pad);
+  ctx.stroke();
+}
+function gridLines(ctx,W,H,pad,rows,maxVal,fmt){
+  ctx.strokeStyle='#ece8dc';ctx.lineWidth=1;
+  for(let i=1;i<=rows;i++){
+    const y=6+(H-pad-6)*i/rows;
+    ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-6,y);ctx.stroke();
+  }
+  // y축 숫자 라벨 (0 ~ maxVal, 위가 maxVal)
+  if(maxVal!==undefined){
+    ctx.fillStyle='#a8a49a';ctx.font='9px sans-serif';ctx.textAlign='right';
+    for(let i=0;i<=rows;i++){
+      const val=maxVal*(rows-i)/rows;
+      const y=6+(H-pad-6)*i/rows;
+      ctx.fillText(fmt?fmt(val):val.toFixed(1), pad-4, y+3);
+    }
+    ctx.textAlign='left';
+  }
+}
+// 히스토리 x축(시간, 초) 눈금 — 처음/중간/끝 3개
+function xTimeTicks(ctx,W,H,pad,hist){
+  if(hist.length<2)return;
+  ctx.fillStyle='#a8a49a';ctx.font='9px sans-serif';ctx.textAlign='center';
+  const idxs=[0, Math.floor(hist.length/2), hist.length-1];
+  for(const i of idxs){
+    const X=pad+(W-6-pad)*i/(state.maxHistory-1);
+    ctx.fillText(hist[i].t.toFixed(1)+'s', X, H-pad+12);
+  }
+  ctx.textAlign='left';
+}
+
+// 1) 농도-시간
+function drawConc(){
+  const cv=document.getElementById('concCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=34;
+  const hist=state.history;
+  const maxC=hist.length? Math.max(1.0, ...hist.map(h=>Math.max(h.cA,h.cB,h.cC)))*1.1 : 1.0;
+  gridLines(ctx,W,H,pad,4,maxC,v=>v.toFixed(2));
+  axes(ctx,W,H,pad);
+  if(hist.length<2){ ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';ctx.fillText('시간(초) →',W/2-20,H-6); return; }
+  const x=(i)=>pad+(W-6-pad)*i/(state.maxHistory-1);
+  const y=(c)=>(H-pad)-(H-pad-6)*(c/maxC);
+  const series=[['cA','#2f7dd1'],['cB','#1d9e75'],['cC','#d85a30']];
+  for(const [key,col] of series){
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+    hist.forEach((h,i)=>{ const X=x(i),Y=y(h[key]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+    ctx.stroke();
+    const last=hist[hist.length-1];
+    ctx.fillStyle=col;ctx.beginPath();
+    ctx.arc(x(hist.length-1),y(last[key]),3,0,Math.PI*2);ctx.fill();
+  }
+  xTimeTicks(ctx,W,H,pad,hist);
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('시간(초) →',W/2-20,H-6);
+  ctx.save();ctx.translate(10,14);ctx.fillText('mol/L',0,0);ctx.restore();
+}
+
+// 2) 속도 비교
+function drawRate(){
+  const cv=document.getElementById('rateCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=34;
+  const hist=state.history;
+  const maxV=hist.length? Math.max(1e-6, ...hist.map(h=>Math.max(h.vf,h.vr)))*1.15 : 1e-6;
+  gridLines(ctx,W,H,pad,4,maxV,v=>v.toExponential(1));
+  axes(ctx,W,H,pad);
+  if(hist.length<2){ ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';ctx.fillText('시간(초) →',W/2-20,H-6); return; }
+  const x=(i)=>pad+(W-6-pad)*i/(state.maxHistory-1);
+  const y=(v)=>(H-pad)-(H-pad-6)*(v/maxV);
+  const series=[['vf','#2f7dd1'],['vr','#d85a30']];
+  for(const [key,col] of series){
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+    hist.forEach((h,i)=>{const X=x(i),Y=y(h[key]);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+    ctx.stroke();
+  }
+  const last=hist[hist.length-1];
+  ctx.fillStyle='#6b5dd3';ctx.beginPath();
+  ctx.arc(x(hist.length-1),y(last.vf),3,0,Math.PI*2);ctx.fill();
+  xTimeTicks(ctx,W,H,pad,hist);
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('시간(초) →',W/2-20,H-6);
+  ctx.save();ctx.translate(10,14);ctx.fillText('mol/(L·s)',0,0);ctx.restore();
+}
+
+// 3) 자유에너지 패널 — 모드에 따라 G(ξ) 곡선 또는 ΔH/−TΔS/ΔG 분해
+function drawGibbs(){
+  if(state.gibbsMode==='decomp'){ drawGibbsDecomp(); return; }
+  drawGibbsCurve();
+}
+
+// 3a) 자유에너지 곡선 G(ξ) — 일반 화학량론 aA+bB⇌cC
+//     보존량 기준 고정 곡선. 점이 평형(곡선 최저점=Q=K)으로 굴러간다.
+function drawGibbsCurve(){
+  const cv=document.getElementById('gibbsCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=26;
+  axes(ctx,W,H,pad);
+  const a=rxn.a, b=rxn.b, c=rxn.c;
+  // 보존량(원소 등가량): 반응이 진행돼도 불변
+  const NA=state.cA + (a/c)*state.cC;
+  const NB=b>0 ? state.cB + (b/c)*state.cC : Infinity;
+  // 진행도 ξ: [C]=c·ξ, [A]=NA−a·ξ, [B]=NB−b·ξ.  ξ ∈ [0, ximax]
+  const ximax=Math.min(NA/a, b>0?NB/b:Infinity);
+  if(!(ximax>1e-6)){ ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+    ctx.fillText('ξ (반응 진행도) →',W/2-44,H-6); return; }
+  const dG0=gibbsStd(state.T), T=state.T;
+  const N=120, dxi=ximax/N;
+  const Qof=(xi)=>{
+    const cA=Math.max(NA-a*xi,1e-7), cC=Math.max(c*xi,1e-7);
+    const cB=b>0?Math.max(NB-b*xi,1e-7):1;
+    return Math.pow(cC,c)/(Math.pow(cA,a)*(b>0?Math.pow(cB,b):1));
+  };
+  // G(ξ) = ∫₀^ξ (ΔG° + RT lnQ) dξ'  (사다리꼴)
+  const pts=[{xi:0,G:0}];
+  let G=0, prev=dG0+R*T*Math.log(Qof(dxi*0.001));
+  for(let i=1;i<=N;i++){
+    const xi=dxi*i;
+    const dGrxn=dG0+R*T*Math.log(Qof(xi));
+    G+=0.5*(prev+dGrxn)*dxi; prev=dGrxn;
+    pts.push({xi,G});
+  }
+  const Gs=pts.map(p=>p.G);
+  const minG=Math.min(...Gs), maxG=Math.max(...Gs);
+  const span=(maxG-minG)||1;
+  const x=(xi)=>pad+(W-6-pad)*(xi/ximax);
+  const y=(g)=>(H-pad)-(H-pad-14)*((g-minG)/span);
+  // 곡선
+  ctx.strokeStyle='#6b5dd3';ctx.lineWidth=2;ctx.beginPath();
+  pts.forEach((p,i)=>{const X=x(p.xi),Y=y(p.G);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+  ctx.stroke();
+  // 평형(곡선 최저점) 세로선
+  let kmin=0; for(let i=1;i<pts.length;i++) if(pts[i].G<pts[kmin].G) kmin=i;
+  ctx.strokeStyle='rgba(29,158,117,.5)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(x(pts[kmin].xi),8);ctx.lineTo(x(pts[kmin].xi),H-pad);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#0f6e56';ctx.font='9px sans-serif';
+  ctx.fillText('평형',x(pts[kmin].xi)+3,16);
+  // 현재 상태 점: ξ_now = [C]/c
+  const xiNow=Math.max(0,Math.min(ximax, state.cC/c));
+  const fi=xiNow/dxi; const i0=Math.max(0,Math.min(N,Math.floor(fi)));
+  const i1=Math.min(N,i0+1); const fr=fi-i0;
+  const gNow=pts[i0].G+(pts[i1].G-pts[i0].G)*fr;
+  ctx.fillStyle='#d85a30';ctx.beginPath();
+  ctx.arc(x(xiNow),y(gNow),5,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('ξ (반응 진행도) →',W/2-44,H-6);
+  ctx.fillText('G (상대값)',6,16);
+}
+
+// 3b) 엔트로피 분해 — ΔG° = ΔH − TΔS 를 막대로. 온도에 따라 줄다리기.
+function drawGibbsDecomp(){
+  const cv=document.getElementById('gibbsCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const T=state.T;
+  const dHkJ = rxn.dH/1000;          // ΔH (발열이면 음수)
+  const mTdSkJ = -T*rxn.dS/1000;     // −TΔS (ΔS<0이면 양수 → 정반응에 불리)
+  const dGkJ = (rxn.dH - T*rxn.dS)/1000; // ΔG° = ΔH − TΔS
+  const bars=[
+    {label:'ΔH', val:dHkJ, col:'#2f7dd1'},
+    {label:'−TΔS', val:mTdSkJ, col:'#1d9e75'},
+    {label:'ΔG°', val:dGkJ, col:'#6b5dd3'},
+  ];
+  const maxAbs=Math.max(...bars.map(b=>Math.abs(b.val)),5)*1.15;
+  // 상단(ΔS_전체 텍스트) / 하단(막대 라벨) 영역을 막대와 분리
+  const topPad=30, botPad=26;
+  const zeroY=(topPad+(H-botPad))/2;     // 0 기준선
+  const half=((H-botPad-topPad)/2)-12;   // 막대 최대 높이 (값 라벨 공간 확보)
+  const y=(v)=>zeroY-(v/maxAbs)*half;
+  // 0 기준선
+  ctx.strokeStyle='#dcd8cc';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(20,zeroY);ctx.lineTo(W-10,zeroY);ctx.stroke();
+  ctx.fillStyle='#b4b2a9';ctx.font='9px sans-serif';ctx.fillText('0',8,zeroY+3);
+  // 막대
+  const bw=46, gap=(W-30-bars.length*bw)/(bars.length+1);
+  bars.forEach((b,i)=>{
+    const bx=20+gap+i*(bw+gap);
+    const top=Math.min(zeroY,y(b.val)), h=Math.abs(y(b.val)-zeroY);
+    ctx.fillStyle=b.col;
+    ctx.fillRect(bx,top,bw,Math.max(h,1));
+    // 라벨 (하단 고정 영역)
+    ctx.fillStyle='#52605c';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(b.label,bx+bw/2,H-12);
+    // 값 (막대 끝 바깥, 영역 내)
+    ctx.fillStyle='#1a2e2a';ctx.font='bold 10px sans-serif';
+    const vy=b.val>=0 ? y(b.val)-4 : y(b.val)+12;
+    ctx.fillText(b.val.toFixed(1)+' kJ',bx+bw/2,vy);
+    ctx.textAlign='left';
+  });
+  // 전체 엔트로피(제2법칙): ΔS_univ = −ΔG°/T = ΔS_sys + ΔS_surr
+  const dSuniv = -(rxn.dH - T*rxn.dS)/T;  // J/mol·K
+  const spont = dGkJ<0;
+  ctx.fillStyle=spont?'#0f6e56':'#993c1d';
+  ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`ΔS_전체 = ${dSuniv.toFixed(1)} J/K  →  ${spont?'정반응 자발 (ΔG°<0)':'정반응 비자발 (ΔG°>0)'}`,W/2,16);
+  ctx.textAlign='left';
+}
+//    온도↑ → 곡선이 낮고 넓어지며 Ea 너머 채움(반응 가능 분자)이 커진다.
+function mbDensity(T, vmax, N){
+  const a=molMass/(R*T);
+  const fs=[]; let area=0, prev=0;
+  for(let i=0;i<=N;i++){
+    const v=vmax*i/N;
+    const f=v*v*Math.exp(-a*v*v/2);
+    fs.push(f);
+    if(i>0) area+=0.5*(prev+f)*(vmax/N);
+    prev=f;
+  }
+  area=area||1;
+  return fs.map(f=>f/area);   // 확률밀도
+}
+// 임계속력 v*는 현재 Ea에 따라 동적. vmax는 충분한 여유로 고정(항상 v* 보임).
+function mbVStar(){ return Math.sqrt(2*eaEff()/molMass); }
+const MB_VMAX  = Math.sqrt(2*26000/0.030)*1.3;  // Ea 26kJ까지 수용하는 고정 범위
+const MB_YREF  = Math.max(...mbDensity(200, MB_VMAX, 140));
+
+function drawMB(){
+  const cv=document.getElementById('mbCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=26;
+  axes(ctx,W,H,pad);
+  const T=state.T;
+  const N=140;
+  const dens=mbDensity(T, MB_VMAX, N);
+  const vStar=Math.min(mbVStar(), MB_VMAX*0.98), vmax=MB_VMAX;
+  const x=(v)=>pad+(W-6-pad)*(v/vmax);
+  const y=(d)=>(H-pad)-(H-pad-10)*(d/MB_YREF);
+  // Ea 초과 영역 채움 (면적이 곧 반응 가능 분자 비율)
+  ctx.beginPath();
+  ctx.moveTo(x(vStar),H-pad);
+  let started=false;
+  for(let i=0;i<=N;i++){ const v=vmax*i/N; if(v>=vStar){ ctx.lineTo(x(v),y(dens[i])); started=true; } }
+  if(started){ ctx.lineTo(x(vmax),H-pad); ctx.closePath();
+    ctx.fillStyle='rgba(216,90,48,.18)'; ctx.fill(); }
+  // 곡선
+  ctx.strokeStyle='#1d9e75';ctx.lineWidth=2;ctx.beginPath();
+  for(let i=0;i<=N;i++){ const v=vmax*i/N; const X=x(v),Y=y(dens[i]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+  ctx.stroke();
+  // Ea 임계선 (항상 표시)
+  ctx.strokeStyle='#d85a30';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(x(vStar),8);ctx.lineTo(x(vStar),H-pad);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#c24a1f';ctx.font='bold 10px sans-serif';
+  ctx.fillText('Ea',x(vStar)+3,16);
+  // x축 속력 눈금 (m/s)
+  ctx.fillStyle='#a8a49a';ctx.font='9px sans-serif';ctx.textAlign='center';
+  for(const f of [0,0.5,1.0]){
+    const v=vmax*f;
+    ctx.fillText(Math.round(v), x(v), H-pad+12);
+  }
+  ctx.textAlign='left';
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('분자 속도 (m/s) →',W/2-30,H-6);
+}
+
+// ---------- 리드아웃 갱신 ----------
+function updateReadouts(){
+  document.getElementById('cntA').textContent=nCount(state.cA);
+  document.getElementById('cntB').textContent=nCount(state.cB);
+  document.getElementById('cntC').textContent=nCount(state.cC);
+  document.getElementById('roA').textContent=state.cA.toFixed(3);
+  document.getElementById('roB').textContent=state.cB.toFixed(3);
+  document.getElementById('roC').textContent=state.cC.toFixed(3);
+  const vf=vForward(state), vr=vReverse(state);
+  document.getElementById('roVf').textContent=vf.toExponential(2);
+  document.getElementById('roVr').textContent=vr.toExponential(2);
+  const eqFlag=document.getElementById('eqFlag');
+  eqFlag.textContent = Math.abs(vf-vr) < Math.max(vf,vr)*0.03 + 1e-9 ? '≈ 평형 도달' : '';
+  document.getElementById('roDG').textContent=(deltaG(state)/1000).toFixed(2)+' kJ';
+  // ξ(진행도): 자유에너지 패널과 동일 — 보존량 기준 정규화
+  const NA=state.cA+(rxn.a/rxn.c)*state.cC;
+  const NB=rxn.b>0?state.cB+(rxn.b/rxn.c)*state.cC:Infinity;
+  const ximax=Math.min(NA/rxn.a, rxn.b>0?NB/rxn.b:Infinity);
+  const xiNow = ximax>1e-6 ? (state.cC/rxn.c)/ximax : 0;
+  document.getElementById('roXi').textContent=xiNow.toFixed(2);
+  // Ea 초과 비율: MB 그래프의 채움 면적과 동일하게 분포를 적분
+  const dens=mbDensity(state.T, MB_VMAX, 140);
+  const dv=MB_VMAX/140; let above=0; const vs=Math.min(mbVStar(),MB_VMAX*0.98);
+  for(let i=0;i<=140;i++){ const v=MB_VMAX*i/140; if(v>=vs) above+=dens[i]*dv; }
+  document.getElementById('roFrac').textContent=(above*100).toPrecision(2)+' %';
+  document.getElementById('roKf').textContent=kf(state.T).toExponential(2);
+
+  // ΔG°/K 실시간 배지 — ΔG° = ΔH − TΔS,  K = exp(−ΔG°/RT)
+  const dG0 = gibbsStd(state.T);      // J/mol (표준상태, Q 무관)
+  const Kval = Keq(state.T);
+  const dG0kJ = dG0/1000;
+  const dgEl=document.getElementById('gkDG'), kEl=document.getElementById('gkK');
+  dgEl.textContent = dG0kJ.toFixed(2);
+  dgEl.style.color = dG0kJ<0 ? '#0f6e56' : '#993c1d';   // 음수=초록(자발), 양수=빨강(비자발)
+  kEl.textContent = (Kval>=1000||Kval<0.01) ? Kval.toExponential(2) : Kval.toFixed(2);
+}
+
+// ---------- 메인 루프 ----------
+let lastTs=performance.now();
+let accum=0;
+function loop(ts){
+  const realDt=Math.min((ts-lastTs)/1000, 0.05);
+  lastTs=ts;
+  if(state.running){
+    // 입자 애니메이션 (매 프레임)
+    updateParticles(realDt);
+    // 반응 ODE (고정 스텝 누적)
+    accum+=realDt;
+    const fixed=0.016;
+    while(accum>=fixed){
+      stepReaction(fixed*4);    // 반응 속도 가시성 위해 4배 시간배율
+      state.t+=fixed;
+      accum-=fixed;
+    }
+    // 히스토리 기록 (프레임마다)
+    state.history.push({
+      t:state.t, cA:state.cA, cB:state.cB, cC:state.cC,
+      vf:vForward(state), vr:vReverse(state)
+    });
+    if(state.history.length>state.maxHistory) state.history.shift();
+    processParticleEvents();
+  }
+  drawSim(realDt);
+  drawConc();
+  drawRate();
+  drawGibbs();
+  drawMB();
+  updateReadouts();
+  requestAnimationFrame(loop);
+}
+
+// ---------- 초기화 ----------
+function initSimCanvas(){
+  const cv=document.getElementById('simCanvas');
+  sim.canvas=cv;
+  const dpr=window.devicePixelRatio||1;
+  const cssW=cv.clientWidth;
+  const cssH=Math.round(Math.min(300, Math.max(200, cssW*0.34)));
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  cv.style.height=cssH+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  sim.ctx=ctx; sim.W=cssW; sim.H=cssH; sim.dpr=dpr;
+}
+
+function resetAll(){
+  state.T=300; state.t=0;
+  state.cA=rxn.init.A; state.cB=rxn.init.B; state.cC=rxn.init.C;
+  state.V=1.0; state.catMul=1.0;
+  state.history=[];
+  sim.particles=[];
+  document.getElementById('tempSlider').value=300;
+  document.getElementById('tempVal').textContent=300;
+  document.getElementById('catSlider').value=1.0;
+  document.getElementById('catVal').textContent='1.00';
+  document.getElementById('volSlider').value=1.0;
+  document.getElementById('volVal').textContent='1.00';
+  syncParticles();
+}
+
+// 계수 표기: 1이면 생략 (예: 3H₂, N₂)
+function coefStr(n,name){ return (n===1?'':n)+name; }
+// 반응식 문자열
+function rxnEquation(){
+  const L=[coefStr(rxn.a,rxn.names.A)];
+  if(rxn.b>0) L.push(coefStr(rxn.b,rxn.names.B));
+  return L.join(' + ')+' ⇌ '+coefStr(rxn.c,rxn.names.C);
+}
+// 종 이름·라벨 일괄 갱신 (B=0이면 B 요소 숨김)
+function refreshLabels(){
+  const eq=rxnEquation();
+  document.getElementById('headerRxn').textContent=eq;
+  document.getElementById('rxnEq').textContent=eq;
+  document.getElementById('rxnNote').textContent=rxn.note;
+  document.getElementById('legA').textContent=rxn.names.A;
+  document.getElementById('legB').textContent=rxn.names.B;
+  document.getElementById('legC').textContent=rxn.names.C;
+  document.getElementById('rlA').textContent='['+rxn.names.A+']';
+  document.getElementById('rlB').textContent='['+rxn.names.B+']';
+  document.getElementById('rlC').textContent='['+rxn.names.C+']';
+  document.getElementById('lblAddA').textContent=rxn.names.A+' 추가';
+  document.getElementById('lblAddB').textContent=rxn.names.B+' 추가';
+  document.getElementById('lblAddC').textContent=rxn.names.C+' 추가';
+  const showB = rxn.b>0;
+  document.getElementById('legWrapB').style.display = showB?'':'none';
+  document.getElementById('roWrapB').style.display = showB?'':'none';
+  document.getElementById('btnAddB').style.display = showB?'':'none';
+  // 입력칸 동기화
+  document.getElementById('inpDH').value=(rxn.dH/1000);
+  document.getElementById('inpDS').value=rxn.dS;
+  document.getElementById('inpEa').value=(rxn.Ea/1000);
+}
+
+// 프리셋 적용
+function applyPreset(key){
+  const p=PRESETS[key];
+  Object.assign(rxn, p);
+  rxn.init={A:p.init.A,B:p.init.B,C:p.init.C};
+  rxn.names={A:p.names.A,B:p.names.B,C:p.names.C};
+  refreshLabels();
+  resetAll();
+}
+
+// ---------- 이벤트 ----------
+document.getElementById('tempSlider').addEventListener('input',e=>{
+  state.T=+e.target.value;
+  document.getElementById('tempVal').textContent=state.T;
+});
+document.getElementById('btnAddA').addEventListener('click',()=>{ state.cA+=0.4; sim.injectA+=0.4; });
+document.getElementById('btnAddB').addEventListener('click',()=>{ state.cB+=0.4; sim.injectB+=0.4; });
+document.getElementById('btnAddC').addEventListener('click',()=>{ state.cC+=0.4; sim.injectC+=0.4; });
+document.getElementById('btnReset').addEventListener('click',resetAll);
+document.getElementById('presetSel').addEventListener('change',e=>{
+  const key=e.target.value;
+  const isCustom = key==='custom';
+  document.getElementById('customRow').style.display = isCustom?'flex':'none';
+  if(isCustom){
+    // 현재 반응값으로 입력칸을 채운 뒤 적용
+    document.getElementById('cfA').value=rxn.a;
+    document.getElementById('cfB').value=rxn.b;
+    document.getElementById('cfC').value=rxn.c;
+    document.getElementById('nmA').value=rxn.names.A;
+    document.getElementById('nmB').value=rxn.names.B||'B';
+    document.getElementById('nmC').value=rxn.names.C;
+    document.getElementById('ic0').value=rxn.init.A;
+    document.getElementById('ic1').value=rxn.init.B;
+    document.getElementById('ic2').value=rxn.init.C;
+    applyCustom();
+  } else {
+    applyPreset(key);
+  }
+});
+
+// 사용자 정의 반응 적용
+function applyCustom(){
+  const clampInt=(id,lo,hi,def)=>{ let v=parseInt(document.getElementById(id).value,10); if(isNaN(v))v=def; return Math.max(lo,Math.min(hi,v)); };
+  const clampNum=(id,lo,hi,def)=>{ let v=parseFloat(document.getElementById(id).value); if(isNaN(v))v=def; return Math.max(lo,Math.min(hi,v)); };
+  const nm=(id,def)=>{ const s=(document.getElementById(id).value||'').trim(); return s||def; };
+  const a=clampInt('cfA',1,4,1), b=clampInt('cfB',0,4,1), c=clampInt('cfC',1,4,1);
+  rxn.a=a; rxn.b=b; rxn.c=c;
+  rxn.names={A:nm('nmA','A'), B:nm('nmB','B'), C:nm('nmC','C')};
+  let iA=clampNum('ic0',0,3,1), iB=b>0?clampNum('ic1',0,3,1):0, iC=clampNum('ic2',0,3,0);
+  if(iA+iB+iC<0.05) iA=1; // 모두 0이면 기본값
+  rxn.init={A:iA,B:iB,C:iC};
+  // ΔH/ΔS/Ea는 현재 입력칸 값 사용
+  const dHv=parseFloat(document.getElementById('inpDH').value); if(!isNaN(dHv)) rxn.dH=dHv*1000;
+  const dSv=parseFloat(document.getElementById('inpDS').value); if(!isNaN(dSv)) rxn.dS=dSv;
+  let Eav=parseFloat(document.getElementById('inpEa').value); if(!isNaN(Eav)){ Eav=Math.max(4,Math.min(26,Eav)); rxn.Ea=Eav*1000; }
+  rxn.A_pre=120;
+  rxn.note='직접 입력한 반응. 계수·이름·초기농도·열역학값을 자유롭게 설정하세요.';
+  refreshLabels();
+  resetAll();
+}
+document.getElementById('btnApplyCustom').addEventListener('click',applyCustom);
+document.getElementById('inpDH').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) rxn.dH=v*1000; });
+document.getElementById('inpDS').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) rxn.dS=v; });
+document.getElementById('inpEa').addEventListener('input',e=>{ let v=parseFloat(e.target.value); if(!isNaN(v)){ v=Math.max(4,Math.min(26,v)); rxn.Ea=v*1000; } });
+document.getElementById('catSlider').addEventListener('input',e=>{
+  state.catMul=+e.target.value;
+  document.getElementById('catVal').textContent=state.catMul.toFixed(2);
+});
+document.getElementById('volSlider').addEventListener('input',e=>{
+  const newV=+e.target.value;
+  const ratio=state.V/newV;            // 농도 = n/V → 부피 ratio로 농도 스케일 (분자수 불변)
+  state.cA*=ratio; state.cB*=ratio; state.cC*=ratio;
+  state.V=newV;
+  document.getElementById('volVal').textContent=newV.toFixed(2);
+  // 입자를 새 박스 경계 안으로 가둠 (개수는 그대로)
+  const bb=boxBounds();
+  for(const p of sim.particles){
+    p.x=Math.max(bb.x0+RADIUS,Math.min(bb.x1-RADIUS,p.x));
+    p.y=Math.max(bb.y0+RADIUS,Math.min(bb.y1-RADIUS,p.y));
+  }
+});
+document.getElementById('gibbsToggle').addEventListener('click',()=>{
+  const decomp = state.gibbsMode!=='decomp';
+  state.gibbsMode = decomp?'decomp':'curve';
+  document.getElementById('gibbsTitle').innerHTML = decomp
+    ? '엔트로피 분해 (ΔG° = ΔH − TΔS)' : '자유에너지 곡선 (G vs ξ)';
+  document.getElementById('gibbsDesc').textContent = decomp
+    ? '엔탈피(ΔH)와 엔트로피(−TΔS)의 줄다리기가 반응 방향을 정합니다. 온도를 바꿔보세요.'
+    : '시스템은 자유에너지가 최소인 지점(평형)으로 굴러갑니다.';
+  document.getElementById('gibbsToggle').innerHTML = decomp ? '◂ G 곡선' : '엔트로피 분해 ▸';
+  document.getElementById('gibbsReadout').style.display = decomp?'none':'flex';
+});
+document.getElementById('btnPlay').addEventListener('click',()=>{
+  state.running=!state.running;
+  document.getElementById('playLabel').textContent=state.running?'일시정지':'재생';
+  document.getElementById('statusText').textContent=state.running?'시뮬레이션 실행 중':'일시정지됨';
+});
+
+window.addEventListener('resize',()=>{ initSimCanvas(); });
+
+// ---------- URL 상태 공유 ----------
+// 현재 반응/조건을 URL 쿼리스트링으로 인코딩
+function serializeStateToURL(){
+  const p=new URLSearchParams();
+  p.set('a',rxn.a); p.set('b',rxn.b); p.set('c',rxn.c);
+  p.set('nA',rxn.names.A); p.set('nB',rxn.names.B||''); p.set('nC',rxn.names.C);
+  p.set('dH',(rxn.dH/1000).toFixed(2));
+  p.set('dS',rxn.dS.toFixed(2));
+  p.set('Ea',(rxn.Ea/1000).toFixed(2));
+  p.set('iA',rxn.init.A.toFixed(2)); p.set('iB',rxn.init.B.toFixed(2)); p.set('iC',rxn.init.C.toFixed(2));
+  p.set('T',state.T); p.set('V',state.V.toFixed(2)); p.set('cat',state.catMul.toFixed(2));
+  return location.pathname+'?'+p.toString();
+}
+// URL 쿼리스트링에서 상태 복원 (있으면 true 반환)
+function applyStateFromURL(){
+  const p=new URLSearchParams(location.search);
+  if(![...p.keys()].length) return false;
+  const num=(k,def)=>{ const v=parseFloat(p.get(k)); return isNaN(v)?def:v; };
+  rxn.a=Math.max(1,Math.min(4,Math.round(num('a',1))));
+  rxn.b=Math.max(0,Math.min(4,Math.round(num('b',1))));
+  rxn.c=Math.max(1,Math.min(4,Math.round(num('c',1))));
+  rxn.names={A:p.get('nA')||'A', B:p.get('nB')||'', C:p.get('nC')||'C'};
+  rxn.dH=num('dH',-15)*1000;
+  rxn.dS=num('dS',-30);
+  rxn.Ea=Math.max(4,Math.min(26,num('Ea',12)))*1000;
+  rxn.A_pre=120;
+  rxn.init={A:num('iA',1), B:rxn.b>0?num('iB',1):0, C:num('iC',0)};
+  rxn.note='공유된 링크에서 불러온 사용자 정의 반응입니다.';
+  state.T=Math.max(200,Math.min(600,num('T',300)));
+  state.V=Math.max(0.5,Math.min(2.0,num('V',1.0)));
+  state.catMul=Math.max(0.5,Math.min(1.5,num('cat',1.0)));
+  document.getElementById('presetSel').value='custom';
+  document.getElementById('customRow').style.display='flex';
+  document.getElementById('cfA').value=rxn.a; document.getElementById('cfB').value=rxn.b; document.getElementById('cfC').value=rxn.c;
+  document.getElementById('nmA').value=rxn.names.A; document.getElementById('nmB').value=rxn.names.B||'B'; document.getElementById('nmC').value=rxn.names.C;
+  document.getElementById('ic0').value=rxn.init.A; document.getElementById('ic1').value=rxn.init.B; document.getElementById('ic2').value=rxn.init.C;
+  document.getElementById('tempSlider').value=state.T; document.getElementById('tempVal').textContent=state.T;
+  document.getElementById('volSlider').value=state.V; document.getElementById('volVal').textContent=state.V.toFixed(2);
+  document.getElementById('catSlider').value=state.catMul; document.getElementById('catVal').textContent=state.catMul.toFixed(2);
+  return true;
+}
+document.getElementById('btnShare').addEventListener('click',async ()=>{
+  const url=location.origin+serializeStateToURL();
+  const btn=document.getElementById('btnShare');
+  const orig=btn.innerHTML;
+  try{
+    await navigator.clipboard.writeText(url);
+    btn.innerHTML='✓ 복사됨';
+  }catch(e){
+    // 클립보드 API 실패 시(파일로 열람 등) 프롬프트로 대체
+    window.prompt('아래 링크를 복사하세요:', url);
+  }
+  setTimeout(()=>{ btn.innerHTML=orig; }, 1800);
+});
+
+// 시작
+initSimCanvas();
+applyStateFromURL();
+state.cA=rxn.init.A; state.cB=rxn.init.B; state.cC=rxn.init.C;
+refreshLabels();
+syncParticles();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
