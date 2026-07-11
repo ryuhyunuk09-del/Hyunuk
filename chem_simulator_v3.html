@@ -1,0 +1,1895 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>화학 통합 시뮬레이터 — 반응 2개 동시 비교</title>
+<style>
+  :root{
+    --ink:#1a2e2a;
+    --ink-soft:#52605c;
+    --ink-faint:#8a948f;
+    --paper:#f3f0e7;
+    --surface:#ffffff;
+    --line:#dcd8cc;
+    --line-soft:#e8e4d8;
+    --A:#2f7dd1;
+    --B:#1d9e75;
+    --C:#d85a30;
+    --energy:#6b5dd3;
+    --accent:#c24a1f;
+    --grid:#ece8dc;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1440px;margin:0 auto;padding:24px 20px 60px;}
+  .dual-grid{display:grid;grid-template-columns:1fr;gap:20px;align-items:start;max-width:760px;margin:0 auto;}
+  .dual-grid.two-col{grid-template-columns:1fr 1fr;max-width:none;margin:0;}
+  @media(max-width:1000px){.dual-grid.two-col{grid-template-columns:1fr;}}
+  .panel-col{min-width:0;}
+  .add-panel-card{
+    border:1.5px dashed var(--line);border-radius:14px;background:var(--surface);
+    display:flex;align-items:center;justify-content:center;min-height:120px;
+  }
+  .add-panel-card button{
+    font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;
+    border:1.5px dashed var(--ink-faint);background:transparent;color:var(--ink-soft);
+    border-radius:10px;padding:12px 20px;transition:all .15s ease;
+  }
+  .add-panel-card button:hover{border-color:var(--accent);color:var(--accent);background:rgba(194,74,31,.05);}
+
+  /* Header */
+  header{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    gap:20px;padding-bottom:18px;margin-bottom:20px;
+    border-bottom:2px solid var(--ink);flex-wrap:wrap;
+  }
+  .title-block h1{
+    font-size:clamp(22px,3vw,30px);font-weight:700;letter-spacing:-0.02em;
+    line-height:1.1;
+  }
+  .title-block .rxn{
+    font-family:'Georgia',serif;font-size:18px;color:var(--accent);
+    margin-top:6px;font-style:italic;
+  }
+  .title-block .sub{font-size:13px;color:var(--ink-soft);margin-top:4px;}
+  .status-chip{
+    font-size:12px;color:var(--ink-soft);background:var(--surface);
+    border:1px solid var(--line);border-radius:20px;padding:6px 14px;
+    display:flex;align-items:center;gap:8px;white-space:nowrap;
+  }
+  .status-chip .dot{width:8px;height:8px;border-radius:50%;background:var(--B);
+    animation:pulse 1.6s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+  /* Controls */
+  .controls{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:16px 18px;margin-bottom:16px;
+    display:grid;grid-template-columns:1.4fr auto;gap:20px;align-items:center;
+  }
+  @media(max-width:760px){.controls{grid-template-columns:1fr;}}
+  .controls-2col{grid-template-columns:1fr 1fr;}
+  .temp-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .temp-row label{font-size:13px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
+  .temp-row input[type=range]{flex:1;min-width:120px;accent-color:var(--accent);height:5px;}
+  .temp-val{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px;min-width:62px;text-align:right;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;}
+  button.act{
+    font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    border-radius:9px;padding:9px 14px;display:inline-flex;align-items:center;gap:6px;
+    transition:all .15s ease;
+  }
+  button.act:hover{background:var(--paper);border-color:var(--ink-faint);}
+  button.act:active{transform:scale(.96);}
+  button.add-a{border-color:var(--A);color:var(--A);}
+  button.add-a:hover{background:rgba(47,125,209,.08);}
+  button.add-b{border-color:var(--B);color:var(--B);}
+  button.add-b:hover{background:rgba(29,158,117,.08);}
+  button.add-c{border-color:var(--C);color:var(--C);}
+  button.add-c:hover{background:rgba(216,90,48,.08);}
+  button.play{border-color:var(--ink);color:var(--ink);}
+
+  /* Simulation hero */
+  .sim-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px 12px;margin-bottom:16px;position:relative;overflow:hidden;
+  }
+  .card-head{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:10px;gap:12px;flex-wrap:wrap;
+  }
+  .card-head .lbl{font-size:13px;font-weight:700;letter-spacing:.01em;
+    display:flex;align-items:center;gap:7px;}
+  .card-head .lbl .tag{
+    font-size:10px;font-weight:700;color:var(--accent);background:rgba(194,74,31,.1);
+    padding:2px 7px;border-radius:5px;letter-spacing:.03em;
+  }
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--ink-soft);}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .counts{font-variant-numeric:tabular-nums;font-size:12px;color:var(--ink-soft);}
+  [id$="-simCanvas"]{display:block;width:100%;height:auto;border-radius:8px;
+    background:#fbfaf5;border:1px solid var(--line-soft);}
+
+  /* Graph grid */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:760px){.grid{grid-template-columns:1fr;}}
+  .panel{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px;
+    padding:14px 16px 10px;
+  }
+  .panel .ph{font-size:13px;font-weight:700;margin-bottom:3px;
+    display:flex;align-items:center;gap:7px;}
+  .panel .pd{font-size:11.5px;color:var(--ink-faint);margin-bottom:8px;line-height:1.4;}
+  .panel canvas{display:block;width:100%;height:auto;}
+  .readout{font-variant-numeric:tabular-nums;font-size:11px;color:var(--ink-soft);
+    margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;}
+  .readout b{color:var(--ink);font-weight:700;}
+
+  footer{margin-top:28px;text-align:center;font-size:11.5px;color:var(--ink-faint);
+    line-height:1.6;}
+  .icn{width:16px;height:16px;display:inline-block;vertical-align:-3px;}
+
+  /* 반응형: 좁은 화면 대응 (반드시 base 규칙들 뒤에 위치해 우선 적용됨) */
+  @media(max-width:640px){
+    .controls-2col{grid-template-columns:1fr;}
+  }
+  @media(max-width:480px){
+    .wrap{padding:16px 12px 40px;}
+    h1{font-size:19px;}
+    .temp-row input[type=range]{min-width:80px;flex:1 1 80px;}
+    .btn-row{justify-content:flex-start;}
+    button.act{padding:8px 10px;font-size:12px;}
+    [id$="-customRow"]{padding:10px;}
+    [id$="-customRow"] input[type=text],[id$="-customRow"] input[type=number]{width:48px !important;}
+    [id$="-customRow"] select,[id$="-presetSel"]{min-width:0;width:100%;}
+    .card-head{flex-direction:column;align-items:flex-start;gap:8px;}
+    .legend{gap:10px;flex-wrap:wrap;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>화학 통합 시뮬레이터</h1>
+      <div class="sub">분자 운동 · 반응속도 · 화학평형 · 자유에너지를 한 화면에서. 필요하면 반응을 하나 더 추가해 나란히 비교할 수 있습니다</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+      <button class="act" id="btnShare" style="font-size:12px;padding:6px 12px;"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:14px;height:14px;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>공유 링크 (반응1+2)</button>
+    </div>
+  </header>
+
+  <div class="dual-grid" id="dualGrid">
+    <div id="col-l" class="panel-col"></div>
+    <div id="col-r" class="panel-col">
+      <div class="add-panel-card"><button id="btnAddPanelR">+ 두 번째 반응 추가해서 비교하기</button></div>
+    </div>
+  </div>
+
+  <footer>
+    온도를 올리면 평형 이동과 반응 속도 증가가 동시에 일어나는 것을 5개 화면에서 함께 확인하세요. "+ 두 번째 반응 추가"로 다른 조건의 반응과 나란히 비교할 수도 있습니다.<br>
+    <span style="color:var(--ink-faint);">※ ΔH·ΔS는 프리셋 또는 &quot;DB에서 자동계산&quot;을 쓰면 실제 열역학 데이터를 반영하지만, 속도식(v=k[반응물]ⁿ)과 활성화에너지는
+    시각화를 위한 단순화 모델입니다. 실제 반응(특히 하버법)의 속도론은 이보다 훨씬 복잡하며,
+    Ea는 그래프에서 보이도록 실제보다 작게(4–26 kJ/mol) 설정되어 있습니다. 화합물 DB는 298K·1bar 기체상 표준값(문헌)이며 등재되지 않은 물질은 자동계산되지 않습니다.</span>
+  </footer>
+
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   화학 통합 시뮬레이터 (좌우 2반응 비교판)
+   반응 1개당 독립된 물리 엔진(state/rxn/sim)을 갖는 createSim(ns,...) 인스턴스를
+   좌/우 두 개 생성해 나란히 비교할 수 있도록 구성했다.
+   ============================================================ */
+
+// ---------- 화합물 표준 생성엔탈피 · 표준엔트로피 데이터베이스 ----------
+// 298.15K, 1bar 기준. 사용자가 제공한 표(원 출처: 표준 열역학 상수표)를 정리해 반영.
+// 이름 형식은 "화학식(상태)" — 상태: g=기체, s=고체, l=순수액체, aq=수용액.
+// 같은 화학식이라도 상태별로 값이 다르므로(예: H₂O(g)/H₂O(l)) 상태까지 구분해 저장한다.
+// ΔHf: kJ/mol, S: J/(mol·K). ΔGf°·Cp 열은 이 시뮬레이터 계산에 쓰이지 않아 제외했다.
+const SPECIES_DB = {
+  '(NH₄)₂SO₄(s)':{dHf:-1180.9,S:220.1,state:'s'},
+  'Ag(g)':{dHf:284.9,S:173.0,state:'g'},
+  'Ag(s)':{dHf:0.0,S:42.6,state:'s'},
+  'Ag+(aq)':{dHf:105.8,S:73.5,state:'aq'},
+  'AgBr(s)':{dHf:-100.4,S:107.1,state:'s'},
+  'AgCN(s)':{dHf:146.0,S:107.2,state:'s'},
+  'AgCl(s)':{dHf:-127.0,S:96.3,state:'s'},
+  'AgF(s)':{dHf:-204.6,S:84.0,state:'s'},
+  'AgI(s)':{dHf:-61.8,S:115.5,state:'s'},
+  'AgNO₃(s)':{dHf:-124.4,S:140.9,state:'s'},
+  'Ag₂CO₃(s)':{dHf:-505.8,S:167.4,state:'s'},
+  'Ag₂O(s)':{dHf:-31.1,S:121.3,state:'s'},
+  'Ag₂S(s)':{dHf:-32.6,S:144.0,state:'s'},
+  'Al(OH)₄-(aq)':{dHf:-1490.0,S:117.0,state:'aq'},
+  'Al(g)':{dHf:330.0,S:164.6,state:'g'},
+  'Al(s)':{dHf:0.0,S:28.3,state:'s'},
+  'AlBr₃(s)':{dHf:-527.2,S:180.2,state:'s'},
+  'AlCl₃(s)':{dHf:-704.5,S:112.3,state:'s'},
+  'AlF₃(s)':{dHf:-1510.4,S:66.5,state:'s'},
+  'AlI₃(s)':{dHf:-302.9,S:195.9,state:'s'},
+  'AlPO₄(s)':{dHf:-1733.8,S:90.8,state:'s'},
+  'Al₂O₃(s)':{dHf:-1675.7,S:50.9,state:'s'},
+  'Ar(g)':{dHf:0.0,S:154.9,state:'g'},
+  'B(g)':{dHf:565.0,S:153.4,state:'g'},
+  'B(s)':{dHf:0.0,S:5.9,state:'s'},
+  'BH(g)':{dHf:442.7,S:171.8,state:'g'},
+  'BH₃(g)':{dHf:89.2,S:188.2,state:'g'},
+  'Ba(g)':{dHf:180.0,S:170.2,state:'g'},
+  'Ba(s)':{dHf:0.0,S:62.5,state:'s'},
+  'BaBr₂(s)':{dHf:-757.3,S:146.0,state:'s'},
+  'BaCO₃(s)':{dHf:-1213.0,S:112.1,state:'s'},
+  'BaCl₂(s)':{dHf:-855.0,S:123.7,state:'s'},
+  'BaF₂(s)':{dHf:-1207.1,S:96.4,state:'s'},
+  'BaH₂(s)':{dHf:-177.0,S:63.0,state:'s'},
+  'BaI₂(s)':{dHf:-602.1,S:167.0,state:'s'},
+  'BaO(s)':{dHf:-548.0,S:72.1,state:'s'},
+  'BaSO₄(s)':{dHf:-1473.2,S:132.2,state:'s'},
+  'Be(OH)₂(s)':{dHf:-902.5,S:45.5,state:'s'},
+  'Be(g)':{dHf:324.0,S:136.3,state:'g'},
+  'Be(s)':{dHf:0.0,S:9.5,state:'s'},
+  'BeBr₂(s)':{dHf:-353.5,S:108.0,state:'s'},
+  'BeCl₂(s)':{dHf:-490.4,S:75.8,state:'s'},
+  'BeF₂(s)':{dHf:-1026.8,S:53.4,state:'s'},
+  'BeI₂(s)':{dHf:-192.5,S:121.0,state:'s'},
+  'BeO(s)':{dHf:-609.4,S:13.8,state:'s'},
+  'BeSO₄(s)':{dHf:-1205.2,S:77.9,state:'s'},
+  'Bi(g)':{dHf:207.1,S:187.0,state:'g'},
+  'Bi(s)':{dHf:0.0,S:56.7,state:'s'},
+  'BiCl₃(s)':{dHf:-379.1,S:177.0,state:'s'},
+  'Bi₂O₃(s)':{dHf:-573.9,S:151.5,state:'s'},
+  'Br(g)':{dHf:111.9,S:175.0,state:'g'},
+  'Br-(aq)':{dHf:-121.4,S:82.6,state:'aq'},
+  'BrCl(g)':{dHf:14.6,S:240.1,state:'g'},
+  'BrF(g)':{dHf:-93.8,S:229.0,state:'g'},
+  'BrF₃(g)':{dHf:-1136.0,S:254.4,state:'g'},
+  'Br₂(g)':{dHf:30.9,S:245.5,state:'g'},
+  'Br₂(l)':{dHf:0.0,S:152.2,state:'l'},
+  'B₂S₃(s)':{dHf:-240.6,S:100.0,state:'s'},
+  'C(g)':{dHf:716.7,S:158.1,state:'g'},
+  'C(s, diamond)':{dHf:1.9,S:2.4,state:'s'},
+  'C(s, graphite)':{dHf:0.0,S:5.7,state:'s'},
+  'CBr₄(g)':{dHf:83.9,S:358.1,state:'g'},
+  'CBr₄(s)':{dHf:29.4,S:212.5,state:'s'},
+  'CCl₂F₂(g)':{dHf:-477.4,S:300.8,state:'g'},
+  'CCl₂O(g)':{dHf:-219.1,S:283.5,state:'g'},
+  'CCl₄(g)':{dHf:-95.7,S:309.9,state:'g'},
+  'CCl₄(l)':{dHf:-128.2,S:216.2,state:'l'},
+  'CF₄(g)':{dHf:-933.6,S:261.6,state:'g'},
+  'CO(g)':{dHf:-110.5,S:197.7,state:'g'},
+  'CO₂(g)':{dHf:-393.5,S:213.8,state:'g'},
+  'CS₂(g)':{dHf:116.7,S:237.8,state:'g'},
+  'CS₂(l)':{dHf:89.0,S:151.3,state:'l'},
+  'Ca(OH)₂(s)':{dHf:-985.2,S:83.4,state:'s'},
+  'Ca(g)':{dHf:177.8,S:154.9,state:'g'},
+  'Ca(s)':{dHf:0.0,S:41.6,state:'s'},
+  'CaBr₂(s)':{dHf:-682.8,S:130.0,state:'s'},
+  'CaCO₃(s, aragonite)':{dHf:-1207.8,S:88.0,state:'s'},
+  'CaCO₃(s, calcite)':{dHf:-1207.6,S:91.7,state:'s'},
+  'CaCl₂(s)':{dHf:-795.4,S:108.4,state:'s'},
+  'CaF₂(s)':{dHf:-1228.0,S:68.5,state:'s'},
+  'CaH₂(s)':{dHf:-181.5,S:41.4,state:'s'},
+  'CaI₂(s)':{dHf:-533.5,S:142.0,state:'s'},
+  'CaO(s)':{dHf:-634.9,S:38.1,state:'s'},
+  'CaSO₄(s)':{dHf:-1434.5,S:106.5,state:'s'},
+  'Cd(g)':{dHf:111.8,S:167.7,state:'g'},
+  'Cd(s)':{dHf:0.0,S:51.8,state:'s'},
+  'CdBr₂(s)':{dHf:-316.2,S:137.2,state:'s'},
+  'CdCO₃(s)':{dHf:-750.6,S:92.5,state:'s'},
+  'CdCl₂(s)':{dHf:-391.5,S:115.3,state:'s'},
+  'CdF₂(s)':{dHf:-700.4,S:77.4,state:'s'},
+  'CdS(s)':{dHf:-161.9,S:64.9,state:'s'},
+  'CdSO₄(s)':{dHf:-933.3,S:123.0,state:'s'},
+  'Cl(g)':{dHf:121.3,S:165.2,state:'g'},
+  'Cl-(aq)':{dHf:-167.1,S:56.6,state:'aq'},
+  'ClF(g)':{dHf:-50.3,S:217.9,state:'g'},
+  'ClF₃(g)':{dHf:-163.2,S:281.6,state:'g'},
+  'ClO₂(g)':{dHf:89.1,S:263.7,state:'g'},
+  'Cl₂(g)':{dHf:0.0,S:223.1,state:'g'},
+  'Cl₂O(g)':{dHf:80.3,S:266.2,state:'g'},
+  'Co(g)':{dHf:424.7,S:179.5,state:'g'},
+  'Co(s)':{dHf:0.0,S:30.0,state:'s'},
+  'CoCl₂(s)':{dHf:-312.5,S:109.2,state:'s'},
+  'Cr(g)':{dHf:396.6,S:174.5,state:'g'},
+  'Cr(s)':{dHf:0.0,S:23.8,state:'s'},
+  'CrCl₂(s)':{dHf:-395.4,S:115.3,state:'s'},
+  'CrCl₃(s)':{dHf:-556.5,S:123.0,state:'s'},
+  'CrO₃(g)':{dHf:-292.9,S:266.2,state:'g'},
+  'Cr₂O₃(s)':{dHf:-1139.7,S:81.2,state:'s'},
+  'Cs(g)':{dHf:76.5,S:175.6,state:'g'},
+  'Cs(s)':{dHf:0.0,S:85.2,state:'s'},
+  'CsCl(s)':{dHf:-443.0,S:101.2,state:'s'},
+  'Cu(g)':{dHf:337.4,S:166.4,state:'g'},
+  'Cu(s)':{dHf:0.0,S:33.2,state:'s'},
+  'CuBr(s)':{dHf:-104.6,S:96.1,state:'s'},
+  'CuCN(s)':{dHf:96.2,S:84.5,state:'s'},
+  'CuCl(s)':{dHf:-137.2,S:86.2,state:'s'},
+  'CuCl₂(s)':{dHf:-220.1,S:108.1,state:'s'},
+  'CuO(s)':{dHf:-157.3,S:42.6,state:'s'},
+  'CuS(s)':{dHf:-53.1,S:66.5,state:'s'},
+  'CuSO₄(s)':{dHf:-771.4,S:109.2,state:'s'},
+  'Cu₂O(s)':{dHf:-168.6,S:93.1,state:'s'},
+  'Cu₂S(s)':{dHf:-79.5,S:120.9,state:'s'},
+  'F(g)':{dHf:79.4,S:158.8,state:'g'},
+  'F-(aq)':{dHf:-335.4,S:-13.8,state:'aq'},
+  'FB(g)':{dHf:-122.2,S:200.5,state:'g'},
+  'FO(g)':{dHf:109.0,S:216.4,state:'g'},
+  'Fe(g)':{dHf:416.3,S:180.5,state:'g'},
+  'Fe(s)':{dHf:0.0,S:27.3,state:'s'},
+  'FeBr₂(s)':{dHf:-249.8,S:140.6,state:'s'},
+  'FeCO₃(s)':{dHf:-740.6,S:92.9,state:'s'},
+  'FeCl₂(s)':{dHf:-341.8,S:118.0,state:'s'},
+  'FeCl₃(s)':{dHf:-399.5,S:142.3,state:'s'},
+  'FeO(s)':{dHf:-272.0,S:60.7,state:'s'},
+  'FeS₂(s)':{dHf:-178.2,S:52.9,state:'s'},
+  'Fe₂+(aq)':{dHf:-89.1,S:-137.7,state:'aq'},
+  'Fe₂O₃(s)':{dHf:-824.2,S:87.4,state:'s'},
+  'Fe₃+(aq)':{dHf:-48.5,S:-315.9,state:'aq'},
+  'Fe₃C(s)':{dHf:25.1,S:104.6,state:'s'},
+  'Fe₃O₄(s)':{dHf:-1118.4,S:146.4,state:'s'},
+  'F₂(g)':{dHf:0.0,S:202.8,state:'g'},
+  'F₂O(g)':{dHf:24.5,S:247.5,state:'g'},
+  'H(g)':{dHf:218.0,S:114.7,state:'g'},
+  'H+(aq)':{dHf:0.0,S:0.0,state:'aq'},
+  'HBr(aq)':{dHf:-121.6,S:82.4,state:'aq'},
+  'HBr(g)':{dHf:-36.3,S:198.7,state:'g'},
+  'HCN(g)':{dHf:135.1,S:201.8,state:'g'},
+  'HCN(l)':{dHf:108.9,S:112.8,state:'l'},
+  'HCl(aq)':{dHf:-167.2,S:56.5,state:'aq'},
+  'HCl(g)':{dHf:-92.3,S:186.9,state:'g'},
+  'HF(aq)':{dHf:-332.6,S:-13.8,state:'aq'},
+  'HF(g)':{dHf:-273.3,S:173.8,state:'g'},
+  'HI(aq)':{dHf:-55.2,S:111.3,state:'aq'},
+  'HI(g)':{dHf:26.5,S:206.6,state:'g'},
+  'HNO₂(g)':{dHf:-79.5,S:254.1,state:'g'},
+  'HNO₃(aq)':{dHf:-207.4,S:146.4,state:'aq'},
+  'HNO₃(g)':{dHf:-133.9,S:266.9,state:'g'},
+  'HNO₃(l)':{dHf:-174.1,S:155.6,state:'l'},
+  'He(g)':{dHf:0.0,S:126.2,state:'g'},
+  'Hg(g)':{dHf:61.4,S:175.0,state:'g'},
+  'Hg(l)':{dHf:0.0,S:75.9,state:'l'},
+  'HgBr₂(s)':{dHf:-170.7,S:172.0,state:'s'},
+  'HgCl₂(s)':{dHf:-224.3,S:146.0,state:'s'},
+  'HgI₂(s)':{dHf:-105.4,S:180.0,state:'s'},
+  'HgO(s)':{dHf:-90.8,S:70.3,state:'s'},
+  'HgS(s, red)':{dHf:-58.2,S:82.4,state:'s'},
+  'Hg₂(g)':{dHf:108.8,S:288.1,state:'g'},
+  'Hg₂Br₂(s)':{dHf:-206.9,S:218.0,state:'s'},
+  'Hg₂Cl₂(s)':{dHf:-265.4,S:191.6,state:'s'},
+  'Hg₂I₂(s)':{dHf:-121.3,S:233.5,state:'s'},
+  'Hg₂SO₄(s)':{dHf:-743.1,S:200.7,state:'s'},
+  'H₂(g)':{dHf:0.0,S:130.7,state:'g'},
+  'H₂O(g)':{dHf:-241.8,S:188.8,state:'g'},
+  'H₂O(l)':{dHf:-285.8,S:70.0,state:'l'},
+  'H₂O₂(g)':{dHf:-136.3,S:232.7,state:'g'},
+  'H₂O₂(l)':{dHf:-187.8,S:109.6,state:'l'},
+  'H₂S(g)':{dHf:-20.6,S:205.8,state:'g'},
+  'H₂SO₄(aq)':{dHf:-909.3,S:20.1,state:'aq'},
+  'H₂SO₄(l)':{dHf:-814.0,S:156.9,state:'l'},
+  'H₂Se(g)':{dHf:29.7,S:219.0,state:'g'},
+  'H₃PO₄(l)':{dHf:-1271.7,S:150.8,state:'l'},
+  'H₃PO₄(s)':{dHf:-1284.4,S:110.5,state:'s'},
+  'I(g)':{dHf:106.8,S:180.8,state:'g'},
+  'I-(aq)':{dHf:-56.8,S:106.5,state:'aq'},
+  'IBr(g)':{dHf:40.8,S:258.8,state:'g'},
+  'ICl(g)':{dHf:17.8,S:247.6,state:'g'},
+  'IF(g)':{dHf:-95.7,S:236.2,state:'g'},
+  'I₂(g)':{dHf:62.4,S:260.7,state:'g'},
+  'I₂(s)':{dHf:0.0,S:116.1,state:'s'},
+  'K(g)':{dHf:89.0,S:160.3,state:'g'},
+  'K(s)':{dHf:0.0,S:64.7,state:'s'},
+  'KBr(s)':{dHf:-393.8,S:95.9,state:'s'},
+  'KCl(s)':{dHf:-436.5,S:82.6,state:'s'},
+  'KClO₃(s)':{dHf:-397.7,S:143.1,state:'s'},
+  'KF(s)':{dHf:-567.3,S:66.6,state:'s'},
+  'KI(s)':{dHf:-327.9,S:106.3,state:'s'},
+  'KMnO₄(s)':{dHf:-837.2,S:171.7,state:'s'},
+  'KNO₂(s)':{dHf:-369.8,S:152.1,state:'s'},
+  'KNO₃(s)':{dHf:-494.6,S:133.1,state:'s'},
+  'KSCN(s)':{dHf:-200.2,S:124.3,state:'s'},
+  'Kr(g)':{dHf:0.0,S:164.1,state:'g'},
+  'K₂CO₃(s)':{dHf:-1151.0,S:155.5,state:'s'},
+  'K₂O(s)':{dHf:-361.5,S:94.1,state:'s'},
+  'K₂O₂(s)':{dHf:-494.1,S:102.1,state:'s'},
+  'K₂SO₄(s)':{dHf:-1437.8,S:175.6,state:'s'},
+  'Li(g)':{dHf:159.3,S:138.8,state:'g'},
+  'Li(s)':{dHf:0.0,S:29.1,state:'s'},
+  'Li+(aq)':{dHf:-278.5,S:12.4,state:'aq'},
+  'LiBr(s)':{dHf:-351.2,S:74.3,state:'s'},
+  'LiCl(s)':{dHf:-408.6,S:59.3,state:'s'},
+  'LiF(s)':{dHf:-616.0,S:35.7,state:'s'},
+  'LiI(s)':{dHf:-270.4,S:86.8,state:'s'},
+  'LiNO₃(s)':{dHf:-483.1,S:90.0,state:'s'},
+  'LiOH(s)':{dHf:-487.5,S:42.8,state:'s'},
+  'Li₂O(s)':{dHf:-597.9,S:37.6,state:'s'},
+  'Mg(OH)₂(s)':{dHf:-924.5,S:63.2,state:'s'},
+  'Mg(g)':{dHf:147.1,S:148.6,state:'g'},
+  'Mg(s)':{dHf:0.0,S:32.7,state:'s'},
+  'MgBr₂(s)':{dHf:-524.3,S:117.2,state:'s'},
+  'MgCl₂(s)':{dHf:-641.3,S:89.6,state:'s'},
+  'MgF₂(s)':{dHf:-1124.2,S:57.2,state:'s'},
+  'MgO(s)':{dHf:-601.6,S:27.0,state:'s'},
+  'MgS(s)':{dHf:-346.0,S:50.3,state:'s'},
+  'MgSO₄(s)':{dHf:-1284.9,S:91.6,state:'s'},
+  'Mn(g)':{dHf:280.7,S:173.7,state:'g'},
+  'Mn(s)':{dHf:0.0,S:32.0,state:'s'},
+  'MnCl₂(s)':{dHf:-481.3,S:118.2,state:'s'},
+  'MnO(s)':{dHf:-385.2,S:59.7,state:'s'},
+  'MnO₂(s)':{dHf:-520.0,S:53.1,state:'s'},
+  'MnO₄-(aq)':{dHf:-541.4,S:191.2,state:'aq'},
+  'Mo(g)':{dHf:658.1,S:182.0,state:'g'},
+  'Mo(s)':{dHf:0.0,S:28.7,state:'s'},
+  'MoO₂(s)':{dHf:-588.9,S:46.3,state:'s'},
+  'MoO₃(s)':{dHf:-745.1,S:77.7,state:'s'},
+  'MoS₂(s)':{dHf:-235.1,S:62.6,state:'s'},
+  'MoS₃(s)':{dHf:-364.0,S:119.0,state:'s'},
+  'N(g)':{dHf:472.7,S:153.3,state:'g'},
+  'NF₃(g)':{dHf:-132.1,S:260.8,state:'g'},
+  'NH₃(g)':{dHf:-45.9,S:192.8,state:'g'},
+  'NH₄+(aq)':{dHf:-133.3,S:111.2,state:'aq'},
+  'NH₄Cl(s)':{dHf:-314.4,S:94.6,state:'s'},
+  'NH₄NO₃(s)':{dHf:-365.6,S:151.1,state:'s'},
+  'NH₄OH(l)':{dHf:-361.2,S:165.6,state:'l'},
+  'NO(g)':{dHf:91.3,S:210.8,state:'g'},
+  'NO₂(g)':{dHf:33.2,S:240.1,state:'g'},
+  'Na(g)':{dHf:107.5,S:153.7,state:'g'},
+  'Na(s)':{dHf:0.0,S:51.3,state:'s'},
+  'Na+(aq)':{dHf:-240.2,S:58.5,state:'aq'},
+  'NaBr(aq)':{dHf:-361.7,S:141.4,state:'aq'},
+  'NaBr(g)':{dHf:-143.1,S:241.2,state:'g'},
+  'NaBr(s)':{dHf:-361.1,S:86.8,state:'s'},
+  'NaCN(s)':{dHf:-87.5,S:115.6,state:'s'},
+  'NaCl(aq)':{dHf:-407.3,S:115.5,state:'aq'},
+  'NaCl(s)':{dHf:-411.2,S:72.1,state:'s'},
+  'NaF(aq)':{dHf:-572.8,S:45.2,state:'aq'},
+  'NaF(s)':{dHf:-576.6,S:51.1,state:'s'},
+  'NaH(s)':{dHf:-56.3,S:40.0,state:'s'},
+  'NaNO₃(aq)':{dHf:-447.5,S:205.4,state:'aq'},
+  'NaNO₃(s)':{dHf:-467.9,S:116.5,state:'s'},
+  'NaN₃(s)':{dHf:21.7,S:96.9,state:'s'},
+  'NaOH(s)':{dHf:-425.8,S:64.4,state:'s'},
+  'NaO₂(s)':{dHf:-260.2,S:115.9,state:'s'},
+  'Na₂CO₃(s)':{dHf:-1130.7,S:135.0,state:'s'},
+  'Na₂O(s)':{dHf:-414.2,S:75.1,state:'s'},
+  'Na₂O₂(s)':{dHf:-510.9,S:95.0,state:'s'},
+  'Na₂SO₄(s)':{dHf:-1387.1,S:149.6,state:'s'},
+  'Ne(g)':{dHf:0.0,S:146.3,state:'g'},
+  'Ni(OH)₂(s)':{dHf:-529.7,S:88.0,state:'s'},
+  'Ni(g)':{dHf:429.7,S:182.2,state:'g'},
+  'Ni(s)':{dHf:0.0,S:29.9,state:'s'},
+  'NiCl₂(s)':{dHf:-305.3,S:97.7,state:'s'},
+  'NiF₂(s)':{dHf:-651.4,S:73.6,state:'s'},
+  'N₂(g)':{dHf:0.0,S:191.6,state:'g'},
+  'N₂H₄(g)':{dHf:95.4,S:238.5,state:'g'},
+  'N₂H₄(l)':{dHf:50.6,S:121.2,state:'l'},
+  'N₂O(g)':{dHf:81.6,S:220.0,state:'g'},
+  'N₂O₄(g)':{dHf:11.1,S:304.4,state:'g'},
+  'N₂O₄(l)':{dHf:-19.5,S:209.2,state:'l'},
+  'O(g)':{dHf:249.2,S:161.1,state:'g'},
+  'OH-(aq)':{dHf:-230.0,S:-10.9,state:'aq'},
+  'Os(g)':{dHf:791.0,S:192.6,state:'g'},
+  'Os(s)':{dHf:0.0,S:32.6,state:'s'},
+  'OsO₄(g)':{dHf:-337.2,S:293.8,state:'g'},
+  'OsO₄(s)':{dHf:-394.1,S:143.9,state:'s'},
+  'O₂(g)':{dHf:0.0,S:205.2,state:'g'},
+  'O₃(g)':{dHf:142.7,S:238.9,state:'g'},
+  'P(g, white)':{dHf:316.5,S:163.2,state:'g'},
+  'P(s, red)':{dHf:-17.6,S:22.8,state:'s'},
+  'P(s, white)':{dHf:0.0,S:41.1,state:'s'},
+  'PCl₃(g)':{dHf:-287.0,S:311.8,state:'g'},
+  'PCl₃(l)':{dHf:-319.7,S:217.1,state:'l'},
+  'PCl₅(g)':{dHf:-374.9,S:364.6,state:'g'},
+  'PH₃(g)':{dHf:5.4,S:210.2,state:'g'},
+  'POCl₃(g)':{dHf:-558.5,S:325.5,state:'g'},
+  'POCl₃(l)':{dHf:-597.1,S:222.5,state:'l'},
+  'Pb(NO₃)₂(aq)':{dHf:-416.3,S:303.3,state:'aq'},
+  'Pb(g)':{dHf:195.2,S:175.4,state:'g'},
+  'Pb(s)':{dHf:0.0,S:64.8,state:'s'},
+  'PbCO₃(s)':{dHf:-699.1,S:131.0,state:'s'},
+  'PbCl₂(s)':{dHf:-359.4,S:136.0,state:'s'},
+  'PbO(s, red or litharge)':{dHf:-219.0,S:66.5,state:'s'},
+  'PbO(s, yellow or massicot)':{dHf:-217.3,S:68.7,state:'s'},
+  'PbO₂(s)':{dHf:-277.4,S:68.6,state:'s'},
+  'PbS(s)':{dHf:-100.4,S:91.2,state:'s'},
+  'PbSO₄(s)':{dHf:-920.0,S:148.5,state:'s'},
+  'P₂(g)':{dHf:144.0,S:218.1,state:'g'},
+  'P₄(g)':{dHf:58.9,S:280.0,state:'g'},
+  'Rb(g)':{dHf:80.9,S:170.1,state:'g'},
+  'Rb(s)':{dHf:0.0,S:76.8,state:'s'},
+  'RbCl(s)':{dHf:-435.4,S:95.9,state:'s'},
+  'S(g, rhombic)':{dHf:277.2,S:167.8,state:'g'},
+  'S(s, rhombic)':{dHf:0.0,S:32.1,state:'s'},
+  'SOCl₂(g)':{dHf:-212.5,S:309.8,state:'g'},
+  'SO₂(g)':{dHf:-296.8,S:248.2,state:'g'},
+  'SO₃(g)':{dHf:-395.7,S:256.8,state:'g'},
+  'SO₄₂-(aq)':{dHf:-909.3,S:18.5,state:'aq'},
+  'Se(g, gray)':{dHf:227.1,S:176.7,state:'g'},
+  'Se(s, gray)':{dHf:0.0,S:42.4,state:'s'},
+  'Si(g)':{dHf:450.0,S:168.0,state:'g'},
+  'Si(s)':{dHf:0.0,S:18.8,state:'s'},
+  'SiC(s, cubic)':{dHf:-65.3,S:16.6,state:'s'},
+  'SiC(s, hexagonal)':{dHf:-62.8,S:16.5,state:'s'},
+  'SiCl₄(g)':{dHf:-657.0,S:330.7,state:'g'},
+  'SiCl₄(l)':{dHf:-687.0,S:239.7,state:'l'},
+  'SiH₄(g)':{dHf:34.3,S:204.6,state:'g'},
+  'Sn(g, white)':{dHf:301.0,S:168.5,state:'g'},
+  'Sn(s, gray)':{dHf:-2.1,S:44.1,state:'s'},
+  'Sn(s, white)':{dHf:0.0,S:51.2,state:'s'},
+  'SnCl₄(g)':{dHf:-471.5,S:365.8,state:'g'},
+  'SnCl₄(l)':{dHf:-511.3,S:258.6,state:'l'},
+  'SnO₂(s)':{dHf:-557.6,S:49.0,state:'s'},
+  'Ti(g)':{dHf:473.0,S:180.3,state:'g'},
+  'Ti(s)':{dHf:0.0,S:30.7,state:'s'},
+  'TiCl₂(s)':{dHf:-513.8,S:87.4,state:'s'},
+  'TiCl₃(s)':{dHf:-720.9,S:139.7,state:'s'},
+  'TiCl₄(g)':{dHf:-763.0,S:353.0,state:'g'},
+  'TiCl₄(l)':{dHf:-804.2,S:252.3,state:'l'},
+  'TiO₂(s)':{dHf:-944.0,S:50.6,state:'s'},
+  'U(g)':{dHf:533.0,S:199.8,state:'g'},
+  'U(s)':{dHf:0.0,S:50.2,state:'s'},
+  'UF₄(g)':{dHf:-1598.7,S:368.0,state:'g'},
+  'UF₄(s)':{dHf:-1914.2,S:151.7,state:'s'},
+  'UF₆(g)':{dHf:-2147.4,S:377.9,state:'g'},
+  'UF₆(s)':{dHf:-2197.0,S:227.6,state:'s'},
+  'UO₂(g)':{dHf:-465.7,S:274.6,state:'g'},
+  'UO₂(s)':{dHf:-1085.0,S:77.0,state:'s'},
+  'V(g)':{dHf:514.2,S:182.3,state:'g'},
+  'V(s)':{dHf:0.0,S:28.9,state:'s'},
+  'VCl₃(s)':{dHf:-580.7,S:131.0,state:'s'},
+  'VCl₄(g)':{dHf:-525.5,S:362.4,state:'g'},
+  'VCl₄(l)':{dHf:-569.4,S:255.0,state:'l'},
+  'V₂O₅(s)':{dHf:-1550.6,S:131.0,state:'s'},
+  'Xe(g)':{dHf:0.0,S:169.7,state:'g'},
+  'Zn(g)':{dHf:130.4,S:161.0,state:'g'},
+  'Zn(s)':{dHf:0.0,S:41.6,state:'s'},
+  'ZnBr₂(s)':{dHf:-328.7,S:138.5,state:'s'},
+  'ZnCl₂(s)':{dHf:-415.1,S:111.5,state:'s'},
+  'ZnF₂(s)':{dHf:-764.4,S:73.7,state:'s'},
+  'ZnI₂(s)':{dHf:-208.0,S:161.1,state:'s'},
+  'ZnS(s, sphalerite)':{dHf:-206.0,S:57.7,state:'s'},
+  'ZnSO₄(s)':{dHf:-982.8,S:110.5,state:'s'},
+  'Zr(g)':{dHf:608.8,S:181.4,state:'g'},
+  'Zr(s)':{dHf:0.0,S:39.0,state:'s'},
+  'ZrCl₂(s)':{dHf:-502.0,S:110.0,state:'s'},
+  'ZrCl₄(s)':{dHf:-980.5,S:181.6,state:'s'},
+};
+// 사용자가 아라비아 숫자로 입력해도(N2) 아래첨자 표기(N₂)와 매칭되도록 변환
+function toSubscriptDigits(str){
+  const map={'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
+  return str.replace(/[0-9]/g, d=>map[d]);
+}
+// 이름으로 DB 검색.
+// 1) "N₂O₄(g)"처럼 상태까지 정확히 입력하면 그 항목을 바로 반환.
+// 2) "CO₂"처럼 화학식만 입력하면 같은 화학식의 모든 상태를 찾아본다 —
+//    상태가 하나뿐이면 그것으로 확정, 여러 개면 {ambiguous:true, options:[...]}를 돌려줘
+//    dbAutoFill이 사용자에게 어떤 상태인지 콕 집어 입력해달라고 안내한다.
+function lookupSpecies(name){
+  if(!name) return null;
+  const key = toSubscriptDigits(name.trim());
+  if(SPECIES_DB[key]) return SPECIES_DB[key];
+  const candidates = Object.keys(SPECIES_DB).filter(k=>{
+    const m = k.match(/^(.*?)\(/);
+    return m && m[1]===key;
+  });
+  if(candidates.length===1) return SPECIES_DB[candidates[0]];
+  if(candidates.length>1) return {ambiguous:true, options:candidates};
+  return null;
+}
+const SPECIES_DATALIST_OPTIONS = Object.keys(SPECIES_DB).map(k=>`<option value="${k}">`).join('');
+
+
+// ---------- 패널 HTML 템플릿 (좌/우 동일 구조를 ns로 구분해 렌더링) ----------
+function panelHTML(ns, label, accent){
+  return `
+<div class="panel-heading" style="border-left:4px solid ${accent};padding-left:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <span style="font-size:15px;font-weight:700;">${label}</span>
+    <span class="status-chip"><span class="dot" id="${ns}-statusDot"></span><span id="${ns}-statusText">시뮬레이션 실행 중</span></span>
+  </div>
+  <!-- Reaction selector & thermodynamic inputs -->
+  <div class="controls" style="grid-template-columns:1fr;gap:12px;">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <label style="font-size:13px;color:var(--ink-soft);font-weight:600;white-space:nowrap;">반응</label>
+      <select id="${ns}-presetSel" style="font-family:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:220px;">
+        <option value="generic">일반 모델 반응 (A + B ⇌ C, 발열)</option>
+        <option value="endo">일반 흡열 반응 (A + B ⇌ C, 흡열)</option>
+        <option value="haber">하버–보슈법 (N₂ + 3H₂ ⇌ 2NH₃)</option>
+        <option value="n2o4">N₂O₄ 분해 (N₂O₄ ⇌ 2NO₂)</option>
+        <option value="custom">✎ 사용자 정의 (직접 입력)</option>
+      </select>
+      <span id="${ns}-rxnEq" style="font-family:Georgia,serif;font-style:italic;font-size:16px;color:var(--accent);"></span>
+    </div>
+
+    <!-- 사용자 정의 입력 행 -->
+    <div id="${ns}-customRow" style="display:none;flex-direction:column;gap:10px;padding:12px;border:1px dashed var(--line);border-radius:10px;background:#faf8f1;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;">
+        <span style="color:var(--ink-soft);font-weight:600;margin-right:4px;">반응식</span>
+        <input type="number" id="${ns}-cfA" value="1" min="1" max="4" style="width:46px;font-family:inherit;font-size:13px;padding:5px;border:1px solid var(--line);border-radius:6px;text-align:center;">
+        <input type="text" id="${ns}-nmA" value="A" maxlength="6" list="${ns}-speciesList" style="width:62px;font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--A);border-radius:6px;color:var(--A);font-weight:600;text-align:center;">
+        <span style="font-size:16px;color:var(--ink-faint);">+</span>
+        <input type="number" id="${ns}-cfB" value="1" min="0" max="4" style="width:46px;font-family:inherit;font-size:13px;padding:5px;border:1px solid var(--line);border-radius:6px;text-align:center;">
+        <input type="text" id="${ns}-nmB" value="B" maxlength="6" list="${ns}-speciesList" style="width:62px;font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--B);border-radius:6px;color:var(--B);font-weight:600;text-align:center;">
+        <span style="font-size:16px;color:var(--accent);">⇌</span>
+        <input type="number" id="${ns}-cfC" value="1" min="1" max="4" style="width:46px;font-family:inherit;font-size:13px;padding:5px;border:1px solid var(--line);border-radius:6px;text-align:center;">
+        <input type="text" id="${ns}-nmC" value="C" maxlength="6" list="${ns}-speciesList" style="width:62px;font-family:inherit;font-size:13px;padding:5px 7px;border:1px solid var(--C);border-radius:6px;color:var(--C);font-weight:600;text-align:center;">
+        <span style="font-size:11px;color:var(--ink-faint);">(B 계수를 0으로 하면 단일 반응물 분해)</span>
+        <datalist id="${ns}-speciesList">${SPECIES_DATALIST_OPTIONS}</datalist>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+        <span style="color:var(--ink-soft);font-weight:600;">초기농도</span>
+        <label style="color:var(--ink-soft);">[A]<input type="number" id="${ns}-ic0" value="1.0" min="0" max="3" step="0.1" style="width:56px;margin-left:4px;font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;"></label>
+        <label style="color:var(--ink-soft);">[B]<input type="number" id="${ns}-ic1" value="1.0" min="0" max="3" step="0.1" style="width:56px;margin-left:4px;font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;"></label>
+        <label style="color:var(--ink-soft);">[C]<input type="number" id="${ns}-ic2" value="0.0" min="0" max="3" step="0.1" style="width:56px;margin-left:4px;font-family:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;"></label>
+        <span style="color:var(--ink-faint);">— ΔH·ΔS·Ea는 아래 칸에서 설정</span>
+        <button class="act" id="${ns}-btnApplyCustom" style="border-color:var(--accent);color:var(--accent);margin-left:auto;">반응 적용</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;">
+        <button class="act" id="${ns}-btnDbFill" style="border-color:var(--energy);color:var(--energy);">🔎 DB에서 ΔH·ΔS 자동계산</button>
+        <span id="${ns}-dbFillNote" style="font-size:11px;color:var(--ink-faint);">이름칸에 화학식을 입력(예: N₂, CaCO₃(s), H₂O(l))하면 문헌 표준생성열/표준엔트로피로 자동 계산됩니다. 고체·액체는 평형·속도식에서 자동 제외됩니다.</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+      <span style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--ink-soft);">ΔH (kJ/mol)</label>
+        <input type="number" id="${ns}-inpDH" step="1" min="-500" max="500" style="width:80px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);">
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--ink-soft);">ΔS (J/mol·K)</label>
+        <input type="number" id="${ns}-inpDS" step="1" min="-500" max="500" style="width:80px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);">
+      </span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:var(--ink-soft);">Ea (kJ/mol)</label>
+        <input type="number" id="${ns}-inpEa" step="1" min="4" max="26" style="width:70px;font-family:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);">
+      </span>
+      <span id="${ns}-rxnNote" style="font-size:11.5px;color:var(--ink-faint);flex:1;min-width:200px;"></span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="temp-row">
+      <label for="${ns}-tempSlider">온도 T</label>
+      <input type="range" id="${ns}-tempSlider" min="200" max="600" value="300" step="5">
+      <span class="temp-val"><span id="${ns}-tempVal">300</span> K</span>
+      <span id="${ns}-gkBadge" title="ΔG° = ΔH − TΔS (문헌 비교용, 1bar 표준상태 기준) · K = Kc(농도 1mol/L 기준 평형상수, 실제 시뮬레이션에 사용). 기체반응(ΔN≠0)은 Kp≠Kc라 K가 exp(−ΔG°/RT)와 다를 수 있음" style="display:flex;align-items:center;gap:10px;font-size:12px;font-variant-numeric:tabular-nums;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:6px 12px;white-space:nowrap;cursor:help;">
+        <span>&#916;G&deg; = <b id="${ns}-gkDG" style="font-weight:700;">—</b> kJ/mol</span>
+        <span style="color:var(--line);">|</span>
+        <span>K = <b id="${ns}-gkK" style="font-weight:700;color:var(--ink);">—</b></span>
+      </span>
+    </div>
+    <div class="btn-row">
+      <button class="act add-a" id="${ns}-btnAddA"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="${ns}-lblAddA">A 추가</span></button>
+      <button class="act add-b" id="${ns}-btnAddB"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="${ns}-lblAddB">B 추가</span></button>
+      <button class="act add-c" id="${ns}-btnAddC"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="${ns}-lblAddC">C 추가</span></button>
+      <button class="act play" id="${ns}-btnPlay"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg><span id="${ns}-playLabel">일시정지</span></button>
+      <button class="act" id="${ns}-btnReset"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>리셋</button>
+    </div>
+  </div>
+
+  <!-- Catalyst & Volume sliders -->
+  <div class="controls controls-2col">
+    <div class="temp-row">
+      <label for="${ns}-catSlider" title="활성화에너지를 낮추거나(정촉매) 높임(부촉매). 평형은 불변, 속도만 변함">촉매</label>
+      <span style="font-size:11px;color:var(--C);">정촉매</span>
+      <input type="range" id="${ns}-catSlider" min="0.5" max="1.5" value="1.0" step="0.05">
+      <span style="font-size:11px;color:var(--ink-faint);">부촉매</span>
+      <span class="temp-val" style="min-width:78px;">Ea×<span id="${ns}-catVal">1.00</span></span>
+    </div>
+    <div class="temp-row">
+      <label for="${ns}-volSlider" title="부피를 바꿔 농도를 변화시킴 (르샤틀리에)">부피 V</label>
+      <span style="font-size:11px;color:var(--A);">압축</span>
+      <input type="range" id="${ns}-volSlider" min="0.5" max="2.0" value="1.0" step="0.05">
+      <span style="font-size:11px;color:var(--ink-faint);">팽창</span>
+      <span class="temp-val" style="min-width:64px;"><span id="${ns}-volVal">1.00</span> L</span>
+    </div>
+  </div>
+
+  <!-- Simulation hero -->
+  <div class="sim-card">
+    <div class="card-head">
+      <div class="lbl"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M12 2a10 10 0 0 0 0 20"/><ellipse cx="12" cy="12" rx="10" ry="4.5"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(120 12 12)"/></svg>분자 운동 시뮬레이션<span class="tag">실시간</span></div>
+      <div class="legend">
+        <span id="${ns}-legWrapA"><i style="background:var(--A)"></i><span id="${ns}-legA">A</span> <b id="${ns}-cntA" style="font-weight:700">0</b></span>
+        <span id="${ns}-legWrapB"><i style="background:var(--B)"></i><span id="${ns}-legB">B</span> <b id="${ns}-cntB" style="font-weight:700">0</b></span>
+        <span id="${ns}-legWrapC"><i style="background:var(--C)"></i><span id="${ns}-legC">C</span> <b id="${ns}-cntC" style="font-weight:700">0</b></span>
+      </div>
+    </div>
+    <canvas id="${ns}-simCanvas"></canvas>
+  </div>
+
+  <!-- Graph grid -->
+  <div class="grid">
+    <div class="panel">
+      <div class="ph"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M19 9l-5 5-4-4-3 3"/></svg>농도 — 시간</div>
+      <div class="pd">각 물질 농도가 시간에 따라 평형값으로 수렴합니다.</div>
+      <canvas id="${ns}-concCanvas"></canvas>
+      <div class="readout">
+        <span id="${ns}-roWrapA"><span id="${ns}-rlA">[A]</span> <b id="${ns}-roA">—</b></span>
+        <span id="${ns}-roWrapB"><span id="${ns}-rlB">[B]</span> <b id="${ns}-roB">—</b></span>
+        <span id="${ns}-roWrapC"><span id="${ns}-rlC">[C]</span> <b id="${ns}-roC">—</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4l4 4"/><path d="M17 8v12M17 20l4-4M17 20l-4-4"/></svg>정반응 vs 역반응 속도</div>
+      <div class="pd">두 속도가 같아지는 순간이 곧 평형 상태입니다.</div>
+      <canvas id="${ns}-rateCanvas"></canvas>
+      <div class="readout">
+        <span>정반응 <b id="${ns}-roVf">—</b></span>
+        <span>역반응 <b id="${ns}-roVr">—</b></span>
+        <span id="${ns}-eqFlag" style="color:var(--B);font-weight:700"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph" style="justify-content:space-between;">
+        <span style="display:flex;align-items:center;gap:7px;"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg><span id="${ns}-gibbsTitle">자유에너지 곡선 (G vs &#958;)</span></span>
+        <button id="${ns}-gibbsToggle" style="font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);border-radius:7px;padding:4px 9px;">엔트로피 분해 ▸</button>
+      </div>
+      <div class="pd" id="${ns}-gibbsDesc">시스템은 자유에너지가 최소인 지점(평형)으로 굴러갑니다.</div>
+      <canvas id="${ns}-gibbsCanvas"></canvas>
+      <div class="readout" id="${ns}-gibbsReadout">
+        <span>&#916;G <b id="${ns}-roDG">—</b></span>
+        <span>&#958; (진행도) <b id="${ns}-roXi">—</b></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><svg class="icn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20h18"/><path d="M4 20c2-12 6-14 8-14s6 2 8 14"/></svg>분자속도 분포 (맥스웰–볼츠만)</div>
+      <div class="pd">온도가 오르면 분포가 넓어져 Ea를 넘는 분자가 늘어납니다.</div>
+      <canvas id="${ns}-mbCanvas"></canvas>
+      <div class="readout">
+        <span>Ea 초과 비율 <b id="${ns}-roFrac">—</b></span>
+        <span>속도상수 k<sub>f</sub> <b id="${ns}-roKf">—</b></span>
+      </div>
+    </div>
+  </div>
+`;
+}
+
+function createSim(ns, defaultPresetKey, accent, label){
+"use strict";
+/* ============================================================
+   화학 통합 시뮬레이터
+   하나의 물리 엔진(공유 state) + 5개 뷰
+   반응: A + B  <=>  C   (발열반응, dH < 0)
+   ============================================================ */
+
+// ---------- 물리 상수 ----------
+const R = 8.314;            // 기체상수 J/mol·K
+const molMass = 0.030;      // 분자 평균 몰질량 kg/mol (MB 분포용, 시각화 고정)
+
+// ---------- 반응 프리셋 (실제 열역학 데이터) ----------
+// 일반형: a·A + b·B  ⇌  c·C   (b=0 이면 단일 반응물 분해)
+// dH: J/mol, dS: J/mol·K (반응 표준값) / Ea: J/mol (속도·MB용, 시각화 위해 조정)
+const PRESETS = {
+  generic: {
+    label:'일반 모델 반응', names:{A:'A',B:'B',C:'C'},
+    a:1,b:1,c:1, dH:-15000, dS:-30, Ea:12000, A_pre:120,
+    init:{A:1.0,B:1.0,C:0.0}, real:false,
+    note:'교육용 가상 반응 (발열·엔트로피 감소).'
+  },
+  haber: {
+    label:'하버–보슈법 (암모니아 합성)', names:{A:'N₂',B:'H₂',C:'NH₃'},
+    a:1,b:3,c:2, dH:-92200, dS:-198.7, Ea:20000, A_pre:300,
+    init:{A:0.6,B:1.8,C:0.0}, real:true,
+    note:'실제값 ΔH°=−92.2 kJ/mol, ΔS°=−198.7 J/mol·K. 발열·기체몰수 감소.'
+  },
+  n2o4: {
+    label:'N₂O₄ 분해', names:{A:'N₂O₄',B:'',C:'NO₂'},
+    a:1,b:0,c:2, dH:57200, dS:175.8, Ea:14000, A_pre:90,
+    init:{A:1.2,B:0.0,C:0.0}, real:true,
+    note:'실제값 ΔH°=+57.2 kJ/mol, ΔS°=+175.8 J/mol·K. 흡열·기체몰수 증가(대조군).'
+  },
+  endo: {
+    label:'일반 흡열 반응', names:{A:'A',B:'B',C:'C'},
+    a:1,b:1,c:1, dH:20000, dS:60, Ea:12000, A_pre:120,
+    init:{A:1.0,B:1.0,C:0.0}, real:false,
+    note:'교육용 흡열 반응 (ΔH>0). 고온일수록 정반응 자발 — 발열과 반대.'
+  },
+  custom: {
+    label:'사용자 정의', names:{A:'A',B:'B',C:'C'},
+    a:1,b:1,c:1, dH:-15000, dS:-30, Ea:12000, A_pre:120,
+    init:{A:1.0,B:1.0,C:0.0}, real:false,
+    note:'직접 입력한 반응. 계수·이름·초기농도·열역학값을 자유롭게 설정하세요.'
+  },
+};
+
+// 현재 반응 파라미터 (프리셋 복사본 — 사용자가 ΔH/ΔS/Ea 수정 가능)
+const rxn = Object.assign({}, PRESETS[defaultPresetKey] || PRESETS.generic);
+
+// ---------- 공유 상태(state) ----------
+const state = {
+  T: 300,                   // 온도 K
+  t: 0,                     // 경과 시간
+  cA: 1.0, cB: 1.0, cC: 0.0,// 농도 mol/L
+  V: 1.0,                   // 상대 부피 (르샤틀리에)
+  catMul: 1.0,              // 촉매: 유효 Ea 배율 (<1 정촉매, >1 부촉매)
+  running: true,
+  gibbsMode: 'curve',       // 'curve' | 'decomp'
+  history: [],
+  maxHistory: 240,
+};
+const VOL_MAX = 2.0;        // 부피 슬라이더 최대 (박스 최대 = 캔버스)
+
+// 촉매 반영 유효 활성화에너지 (평형 K는 불변, 속도만 변함)
+function eaEff(){ return Math.max(4000, Math.min(26000, rxn.Ea*state.catMul)); }
+
+// ---------- 열역학 / 속도론 (일반 화학량론) ----------
+// ΔG°_p = ΔH − TΔS : 문헌에 나오는 표준 자유에너지 (기체 표준상태 = 1 bar 분압 기준)
+function gibbsStd(T){ return rxn.dH - T*rxn.dS; }
+// Kp = exp(−ΔG°_p/RT) : 압력(활동도) 기준 평형상수. 문헌값과 직접 비교 가능.
+function safeExp(x){ return Math.exp(Math.max(-700,Math.min(700,x))); } // exp 지수를 클램프해 어떤 ΔH/ΔS/ΔN 조합에도 Infinity가 뜨지 않게 하는 안전장치
+function Keq(T){ return safeExp(-gibbsStd(T)/(R*T)); }
+
+// ΔN(기체 몰수 변화) = c − a − b. 기체반응에서는 Kp ≠ Kc이며 그 비율은 (R_LBAR·T)^ΔN.
+// ΔN 계산 시 고체(s)·순수액체(l)는 기체가 아니므로 몰수 변화에 넣지 않는다
+// (예: CaCO₃(s) ⇌ CaO(s) + CO₂(g) 는 기체 쪽만 보면 ΔN=+1)
+function deltaN(){
+  const st = rxn.states || {A:'g',B:'g',C:'g'};
+  const nA = st.A==='g' ? rxn.a : 0;
+  const nB = (rxn.b>0 && st.B==='g') ? rxn.b : 0;
+  const nC = st.C==='g' ? rxn.c : 0;
+  return nC - nA - nB;
+}
+const R_LBAR = 0.083145; // 이상기체상수, L·bar/(mol·K) — 압력(bar)↔농도(mol/L) 환산용
+// ΔG°_c : 농도 표준상태(1 mol/L) 기준으로 환산한 자유에너지.
+// 유도: 이상기체 P=CRT이므로 Kp = Kc·(R_LBAR·T)^ΔN  →  ΔG°_c = ΔG°_p + ΔN·RT·ln(R_LBAR·T)
+// (수정 전에는 Kp를 그대로 몰농도 질량작용식에 대입해 ΔN≠0인 반응(하버법 ΔN=-2, N₂O₄ ΔN=+1)에서
+//  평형 위치가 실제 값과 정량적으로 어긋나 있었다.)
+function gibbsStdC(T){ return gibbsStd(T) + deltaN()*R*T*Math.log(R_LBAR*T); }
+// Kc : 농도(mol/L) 기준 평형상수 — 이 시뮬레이션의 질량작용식은 반드시 이 값을 써야 한다.
+function KeqC(T){ return safeExp(-gibbsStdC(T)/(R*T)); }
+
+// Ea 이상의 운동에너지를 가진 분자 비율 — 맥스웰-볼츠만 속력분포를 실제로 적분한 값.
+// (mbDensity/MB_VMAX/mbVStar는 파일 아래쪽에서 정의되지만 함수 선언 호이스팅 및
+//  최초 호출 시점(다음 애니메이션 프레임)에는 이미 정의가 끝나 있으므로 문제없이 참조 가능)
+function fracAboveEa(T){
+  const dens=mbDensity(T, MB_VMAX, 140);
+  const dv=MB_VMAX/140;
+  const vs=Math.min(mbVStar(), MB_VMAX*0.98);
+  let above=0;
+  for(let i=0;i<=140;i++){ const v=MB_VMAX*i/140; if(v>=vs) above+=dens[i]*dv; }
+  return above;
+}
+// kf: 정반응 속도상수. 예전에는 exp(−Ea/RT)로 근사했는데, 화면에 별도로 표시되는
+// "Ea 초과 비율"과 서로 다른 수식이라 값이 어긋나는 문제가 있었다. 여기서는 같은
+// 맥스웰-볼츠만 적분(fracAboveEa)을 그대로 재사용해 두 수치가 항상 일치하도록 했다.
+function kf(T){ return rxn.A_pre*fracAboveEa(T); }
+function kr(T){ return kf(T)/KeqC(T); }                // 평형에서 vf=vr 보장 (농도기준 Kc 사용)
+// 질량작용 속도식 (화학량론 차수 — 단순화 모델)
+// 고체·순수액체는 활성도(activity)=1로 고정 — 농도항을 속도식/평형식에서 제외한다
+// (불균일 반응의 표준 취급: 예를 들어 C(s)+O₂(g)→CO₂(g)에서 속도식에 [C(s)]는 안 들어감)
+function isCondensed(ph){ return ph==='s'||ph==='l'; }
+function vForward(s){
+  const st=rxn.states||{A:'g',B:'g',C:'g'};
+  const aTerm = isCondensed(st.A) ? 1 : Math.pow(Math.max(s.cA,0),rxn.a);
+  const bTerm = rxn.b>0 ? (isCondensed(st.B) ? 1 : Math.pow(Math.max(s.cB,0),rxn.b)) : 1;
+  return kf(s.T)*aTerm*bTerm;
+}
+function vReverse(s){
+  const st=rxn.states||{A:'g',B:'g',C:'g'};
+  const cTerm = isCondensed(st.C) ? 1 : Math.pow(Math.max(s.cC,0),rxn.c);
+  return kr(s.T)*cTerm;
+}
+
+// 반응지수 Q = [C]^c / ([A]^a [B]^b)  (몰농도 기준 — ΔG°_c와 짝을 맞춰야 함)
+function reactionQ(s){
+  const st=rxn.states||{A:'g',B:'g',C:'g'};
+  const a=isCondensed(st.A) ? 1 : Math.pow(Math.max(s.cA,1e-6),rxn.a);
+  const b=rxn.b>0 ? (isCondensed(st.B) ? 1 : Math.pow(Math.max(s.cB,1e-6),rxn.b)) : 1;
+  const c=isCondensed(st.C) ? 1 : Math.pow(Math.max(s.cC,1e-9),rxn.c);
+  return c/(a*b);
+}
+function deltaG(s){ return gibbsStdC(s.T)+R*s.T*Math.log(reactionQ(s)); }
+
+// ---------- ODE 한 스텝 (일반 화학량론, 반응진행도 ξ 기준) ----------
+// 순반응 net rate(=vf-vr)를 ξ(진행도)의 함수로 계산 (상태를 건드리지 않음)
+function netRateAtXi(xi, NA, NB){
+  const a=rxn.a, b=rxn.b, c=rxn.c;
+  const st=rxn.states||{A:'g',B:'g',C:'g'};
+  const cA=Math.max(NA-a*xi,0), cB=b>0?Math.max(NB-b*xi,0):0, cC=Math.max(c*xi,0);
+  const aTerm = isCondensed(st.A) ? 1 : Math.pow(cA,a);
+  const bTerm = b>0 ? (isCondensed(st.B) ? 1 : Math.pow(cB,b)) : 1;
+  const cTerm = isCondensed(st.C) ? 1 : Math.pow(cC,c);
+  const vf=kf(state.T)*aTerm*bTerm;
+  const vr=kr(state.T)*cTerm;
+  return vf-vr;
+}
+
+// 반응 한 스텝 — 지수 완화(semi-implicit) 적분.
+// 단순 오일러(dxi = net*dt)는 kf·dt 또는 kr·dt가 커지면(고온·강촉매) 평형을 지나쳐
+// 진동하거나 물리적으로 틀린 값에 수렴하는 수치불안정이 있었다.
+// 여기서는 현재 지점에서의 국소 기울기(d(net)/dξ)를 이용해
+//   dξ = (net/(-slope)) · (1 − e^(slope·dt))
+// 형태로 적분한다. slope·dt가 아무리 커도(반응이 아무리 빨라도) 발산·진동 없이
+// 평형(net=0) 쪽으로 매끄럽게 수렴하며, 반응이 느릴 때는 기존 오일러와 사실상 동일하다.
+function stepReaction(dt){
+  const a=rxn.a, b=rxn.b, c=rxn.c;
+  // 보존량(반응이 진행돼도 불변)
+  const NA=state.cA+(a/c)*state.cC;
+  const NB=b>0?state.cB+(b/c)*state.cC:0;
+  const ximax=Math.min(NA/a, b>0?NB/b:Infinity);
+  const xiNow=state.cC/c;
+
+  const net0=netRateAtXi(xiNow, NA, NB);
+  const h=Math.max(1e-6, ximax*1e-5);              // 수치 미분용 미소량
+  const net1=netRateAtXi(Math.min(ximax,xiNow+h), NA, NB);
+  const slope=(net1-net0)/h;                        // d(net)/dξ, 평형 근처에서 음수(안정)
+
+  let dxi;
+  if(slope < -1e-9){
+    dxi = (net0/(-slope)) * (1 - Math.exp(slope*dt));
+  } else {
+    dxi = net0*dt;                                   // 기울기가 거의 0인 예외적 경우: 단순 오일러로 대체
+  }
+
+  // 화학량론적 안전 클램프 (음수 농도 방지, 방어적 이중 안전장치)
+  if(dxi>0) dxi=Math.min(dxi, Math.min(state.cA/a, b>0?state.cB/b:Infinity));
+  else dxi=Math.max(dxi, -state.cC/c);
+
+  state.cA-=a*dxi;
+  if(b>0) state.cB-=b*dxi;
+  state.cC+=c*dxi;
+  state.cA=Math.max(0,state.cA);
+  state.cB=Math.max(0,state.cB);
+  state.cC=Math.max(0,state.cC);
+  // 입자 박스 이벤트 누적 (ξ 단위)
+  if(dxi>0) sim.pendingForm += dxi;
+  else if(dxi<0) sim.pendingBreak += -dxi;
+}
+
+// ---------- 입자 시스템 (시뮬레이션 박스) ----------
+const sim = {
+  canvas:null, ctx:null, W:0, H:0, dpr:1,
+  particles:[],   // {x,y,vx,vy,type}  type: 'A'|'B'|'C'
+  pendingForm:0,  // 정반응(결합)으로 만들 C 누적 농도
+  pendingBreak:0, // 역반응(분해)할 C 누적 농도
+  injectA:0, injectB:0, injectC:0,  // 버튼 주입 누적
+  fx:[],          // 결합/분해 플래시 {x,y,kind,age}
+};
+const PARTICLE_SCALE = 10;   // 농도 1.0 당 입자 수
+const PER = 1/PARTICLE_SCALE;// 입자 1개에 해당하는 농도(=진행도 1이벤트)
+const RADIUS = 5;
+const colorOf = {A:'#2f7dd1', B:'#1d9e75', C:'#d85a30'};
+// 입자 개수 = 물질량 n = 농도 × 부피 (부피만 변하면 개수 불변, 밀도만 변함)
+function nCount(c){ return Math.round(c*state.V*PARTICLE_SCALE); }
+
+function speedScale(T){ return 0.35*Math.sqrt(T/300); } // (호환용, 미사용)
+
+const BASE_SPEED = 120;   // 300K에서의 평균 속력 (px/s)
+function targetMeanSpeed(T){ return BASE_SPEED*Math.sqrt(T/300); } // 평균속력 ∝ √T
+
+// 현재 부피에 해당하는 박스 경계 (면적 ∝ V)
+function boxBounds(){
+  const s=Math.sqrt(state.V/VOL_MAX);
+  const w=sim.W*s, h=sim.H*s;
+  const x0=(sim.W-w)/2, y0=(sim.H-h)/2;
+  return {x0,y0,x1:x0+w,y1:y0+h};
+}
+
+function makeParticle(type){
+  // 속력에 분포를 부여 (모든 입자가 같은 속도가 되지 않도록)
+  const sp = targetMeanSpeed(state.T)*(0.4+Math.random()*1.2);
+  const ang = Math.random()*Math.PI*2;
+  const bb=boxBounds();
+  return {
+    x: bb.x0+RADIUS+Math.random()*Math.max(1,(bb.x1-bb.x0-2*RADIUS)),
+    y: bb.y0+RADIUS+Math.random()*Math.max(1,(bb.y1-bb.y0-2*RADIUS)),
+    vx: Math.cos(ang)*sp,
+    vy: Math.sin(ang)*sp,
+    type
+  };
+}
+
+// 특정 위치에 입자 생성
+function spawnAt(type,x,y){
+  const sp=targetMeanSpeed(state.T)*(0.4+Math.random()*1.2);
+  const ang=Math.random()*Math.PI*2;
+  const bb=boxBounds();
+  return {x:Math.max(bb.x0+RADIUS,Math.min(bb.x1-RADIUS,x)),
+          y:Math.max(bb.y0+RADIUS,Math.min(bb.y1-RADIUS,y)),
+          vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, type};
+}
+function firstIndexOf(type){
+  for(let i=0;i<sim.particles.length;i++) if(sim.particles[i].type===type) return i;
+  return -1;
+}
+function countOf(type){ let c=0; for(const p of sim.particles) if(p.type===type)c++; return c; }
+
+// n번째까지의 해당 type 입자 인덱스들을 모음
+function indicesOf(type,n){
+  const out=[];
+  for(let i=0;i<sim.particles.length && out.length<n;i++)
+    if(sim.particles[i].type===type) out.push(i);
+  return out;
+}
+function removeIndices(idxs){
+  idxs.slice().sort((p,q)=>q-p).forEach(i=>sim.particles.splice(i,1));
+}
+
+// 반응 이벤트 처리: 결합(정반응 aA+bB→cC), 분해(역반응 cC→aA+bB), 주입(버튼)
+const EVENT_BUDGET = 14;  // 프레임당 최대 결합/분해 이벤트 수 (반응이 빨라도 잔여는 다음 프레임에 이어서 처리)
+function processParticleEvents(){
+  const a=rxn.a, b=rxn.b, c=rxn.c;
+  // 1) 버튼 주입
+  while(sim.injectA>=PER){ sim.particles.push(makeParticle('A')); sim.injectA-=PER; }
+  while(sim.injectB>=PER){ sim.particles.push(makeParticle('B')); sim.injectB-=PER; }
+  while(sim.injectC>=PER){ sim.particles.push(makeParticle('C')); sim.injectC-=PER; }
+  // 2) 정반응 결합: a A + b B → c C
+  let budget=EVENT_BUDGET;
+  while(sim.pendingForm>=PER && budget>0){
+    const ai=indicesOf('A',a), bi=(b>0?indicesOf('B',b):[]);
+    if(ai.length<a || bi.length<b) break;
+    // 결합 위치 = 반응물들의 평균
+    let sx=0,sy=0,cnt=0;
+    for(const i of ai){ sx+=sim.particles[i].x; sy+=sim.particles[i].y; cnt++; }
+    for(const i of bi){ sx+=sim.particles[i].x; sy+=sim.particles[i].y; cnt++; }
+    const x=sx/cnt, y=sy/cnt;
+    removeIndices(ai.concat(bi));
+    for(let k=0;k<c;k++) sim.particles.push(spawnAt('C',x+(k-(c-1)/2)*8,y));
+    sim.fx.push({x,y,kind:'form',age:0});
+    sim.pendingForm-=PER; budget--;
+  }
+  // 3) 역반응 분해: c C → a A + b B
+  budget=EVENT_BUDGET;
+  while(sim.pendingBreak>=PER && budget>0){
+    const ci=indicesOf('C',c);
+    if(ci.length<c) break;
+    let sx=0,sy=0;
+    for(const i of ci){ sx+=sim.particles[i].x; sy+=sim.particles[i].y; }
+    const x=sx/c, y=sy/c;
+    removeIndices(ci);
+    for(let k=0;k<a;k++) sim.particles.push(spawnAt('A',x+(k-(a-1)/2)*8,y));
+    for(let k=0;k<b;k++) sim.particles.push(spawnAt('B',x+(k-(b-1)/2)*8,y+8));
+    sim.fx.push({x,y,kind:'break',age:0});
+    sim.pendingBreak-=PER; budget--;
+  }
+  // 4) 완만한 드리프트 보정 — 목표와 실제 개수 차이를 한번에 몰아서 맞추지 않고
+  //    프레임당 최대 2개씩만 조용히 조정한다 (반응이 지나치게 빠를 때 순간이동 방지).
+  //    남은 차이는 위 결합/분해 큐(pendingForm/pendingBreak)가 다음 프레임들에 걸쳐 자연히 처리한다.
+  const DRIFT_CAP=2;
+  const want={A:nCount(state.cA),
+              B:nCount(state.cB),
+              C:nCount(state.cC)};
+  for(const type of ['A','B','C']){
+    let have=countOf(type);
+    let n=Math.min(DRIFT_CAP, Math.max(0,want[type]-have));
+    while(n-->0){ sim.particles.push(makeParticle(type)); have++; }
+    n=Math.min(DRIFT_CAP, Math.max(0,have-want[type]));
+    while(n-->0){
+      const idx=firstIndexOf(type);
+      if(idx<0)break;
+      sim.particles.splice(idx,1); have--;
+    }
+  }
+}
+
+// 초기 입자 배치 (리셋/시작용)
+function syncParticles(){
+  sim.pendingForm=0; sim.pendingBreak=0;
+  sim.injectA=sim.injectB=sim.injectC=0; sim.fx=[];
+  const want={A:nCount(state.cA),
+              B:nCount(state.cB),
+              C:nCount(state.cC)};
+  for(const type of ['A','B','C']){
+    let have=countOf(type);
+    while(have<want[type]){ sim.particles.push(makeParticle(type)); have++; }
+    while(have>want[type]){ const idx=firstIndexOf(type); if(idx<0)break; sim.particles.splice(idx,1); have--; }
+  }
+}
+
+// 1축 경계 반사 — 여러 번 겹쳐 튕겨도(과도한 오버슈트) 안전하게 접어 넣는다.
+// 최대 6회 반사를 반복 적용한 뒤, 그래도 남으면 강제로 클램프하는 이중 안전장치.
+function reflect1D(p, v, lo, hi){
+  if(hi<=lo) return [ (lo+hi)/2, 0 ];           // 박스가 찌그러진 극단 상황 방어
+  for(let iter=0; iter<6; iter++){
+    if(p<lo){ p = lo+(lo-p); v = Math.abs(v); }
+    else if(p>hi){ p = hi-(p-hi); v = -Math.abs(v); }
+    else break;
+  }
+  p = Math.max(lo, Math.min(hi, p));            // 안전망: 최종적으로 반드시 범위 안
+  return [p, v];
+}
+
+function updateParticles(dt){
+  // 앙상블 '평균' 속력만 목표(√T)로 부드럽게 맞춘다 — 개별 속력 차이(분포)는 보존
+  const n0=sim.particles.length;
+  if(n0>0){
+    let mean=0; for(const p of sim.particles) mean+=Math.hypot(p.vx,p.vy);
+    mean/=n0;
+    const target=targetMeanSpeed(state.T);
+    if(mean>1e-3){
+      const f=1+(target-mean)/mean*0.04;
+      for(const p of sim.particles){ p.vx*=f; p.vy*=f; }
+    }
+  }
+  const bb=boxBounds();
+  // 최대 허용 속력: 한 프레임에 박스의 좁은 쪽 변을 넘어서 이동하지 못하도록 제한.
+  // 온도가 아무리 높아도(또는 촉매·부피 조합이 극단적이어도) 화면 밖으로 튀거나
+  // 다음 프레임에 사라져 보이는 일이 없도록 하는 절대 상한.
+  const minDim=Math.max(20, Math.min(bb.x1-bb.x0, bb.y1-bb.y0));
+  const maxSpeed=0.3*minDim/Math.max(dt,1e-4);
+  const clampSpeed=(p)=>{
+    const sp=Math.hypot(p.vx,p.vy);
+    if(sp>maxSpeed){ const s=maxSpeed/sp; p.vx*=s; p.vy*=s; }
+  };
+  for(const p of sim.particles){
+    clampSpeed(p);                              // 이동 전 속력 상한 적용
+    p.x += p.vx*dt;
+    p.y += p.vy*dt;
+    [p.x,p.vx]=reflect1D(p.x,p.vx, bb.x0+RADIUS, bb.x1-RADIUS);
+    [p.y,p.vy]=reflect1D(p.y,p.vy, bb.y0+RADIUS, bb.y1-RADIUS);
+  }
+  // 간단한 입자 간 충돌 (시각 효과)
+  const n=sim.particles.length;
+  for(let i=0;i<n;i++){
+    for(let j=i+1;j<n;j++){
+      const a=sim.particles[i], b=sim.particles[j];
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const d2=dx*dx+dy*dy;
+      const min=2*RADIUS;
+      if(d2<min*min && d2>1e-6){
+        const d=Math.sqrt(d2);
+        const nx=dx/d, ny=dy/d;
+        const overlap=(min-d)/2;
+        a.x-=nx*overlap; a.y-=ny*overlap;
+        b.x+=nx*overlap; b.y+=ny*overlap;
+        // 속도 교환 (1D 탄성, 법선방향)
+        const va=a.vx*nx+a.vy*ny;
+        const vb=b.vx*nx+b.vy*ny;
+        const diff=vb-va;
+        a.vx+=diff*nx; a.vy+=diff*ny;
+        b.vx-=diff*nx; b.vy-=diff*ny;
+      }
+    }
+  }
+  // 충돌로 속도가 상한을 넘었을 경우를 대비해 프레임 끝에서 한 번 더 클램프
+  for(const p of sim.particles) clampSpeed(p);
+}
+
+function drawSim(dt){
+  const ctx=sim.ctx;
+  ctx.clearRect(0,0,sim.W,sim.H);
+  // 부피 박스 테두리 (압축/팽창 시각화)
+  const bb=boxBounds();
+  ctx.strokeStyle='#cfcabb';ctx.lineWidth=1.5;ctx.setLineDash([5,4]);
+  ctx.strokeRect(bb.x0,bb.y0,bb.x1-bb.x0,bb.y1-bb.y0);
+  ctx.setLineDash([]);
+  // 입자
+  for(const p of sim.particles){
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,RADIUS,0,Math.PI*2);
+    ctx.fillStyle=colorOf[p.type];
+    ctx.fill();
+  }
+  // 결합/분해 플래시 (확장하며 사라지는 링)
+  const LIFE=0.45;
+  for(let i=sim.fx.length-1;i>=0;i--){
+    const e=sim.fx[i];
+    e.age+=dt;
+    if(e.age>=LIFE){ sim.fx.splice(i,1); continue; }
+    const t=e.age/LIFE;
+    const r=RADIUS+t*16;
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,r,0,Math.PI*2);
+    ctx.lineWidth=2*(1-t);
+    // 결합=주황(C색), 분해=청록
+    ctx.strokeStyle = e.kind==='form'
+      ? 'rgba(216,90,48,'+(0.9*(1-t))+')'
+      : 'rgba(47,125,209,'+(0.9*(1-t))+')';
+    ctx.stroke();
+  }
+}
+
+// ---------- 그래프 헬퍼 ----------
+function setupCanvas(cv, cssH){
+  const dpr=window.devicePixelRatio||1;
+  const cssW=cv.clientWidth;
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  cv.style.height=cssH+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {ctx,W:cssW,H:cssH};
+}
+function axes(ctx,W,H,pad){
+  ctx.strokeStyle='#dcd8cc';ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.moveTo(pad,6);ctx.lineTo(pad,H-pad);ctx.lineTo(W-6,H-pad);
+  ctx.stroke();
+}
+function gridLines(ctx,W,H,pad,rows,maxVal,fmt){
+  ctx.strokeStyle='#ece8dc';ctx.lineWidth=1;
+  for(let i=1;i<=rows;i++){
+    const y=6+(H-pad-6)*i/rows;
+    ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-6,y);ctx.stroke();
+  }
+  // y축 숫자 라벨 (0 ~ maxVal, 위가 maxVal)
+  if(maxVal!==undefined){
+    ctx.fillStyle='#a8a49a';ctx.font='9px sans-serif';ctx.textAlign='right';
+    for(let i=0;i<=rows;i++){
+      const val=maxVal*(rows-i)/rows;
+      const y=6+(H-pad-6)*i/rows;
+      ctx.fillText(fmt?fmt(val):val.toFixed(1), pad-4, y+3);
+    }
+    ctx.textAlign='left';
+  }
+}
+// 히스토리 x축(시간, 초) 눈금 — 처음/중간/끝 3개
+function xTimeTicks(ctx,W,H,pad,hist){
+  if(hist.length<2)return;
+  ctx.fillStyle='#a8a49a';ctx.font='9px sans-serif';ctx.textAlign='center';
+  const idxs=[0, Math.floor(hist.length/2), hist.length-1];
+  for(const i of idxs){
+    const X=pad+(W-6-pad)*i/(state.maxHistory-1);
+    ctx.fillText(hist[i].t.toFixed(1)+'s', X, H-pad+12);
+  }
+  ctx.textAlign='left';
+}
+
+// 라벨 뒤에 옅은 배경을 깔아 다른 텍스트/그래프선과 겹쳐도 읽히도록 하는 헬퍼
+// (수정 전에는 y축 상단 눈금 숫자와 'mol/L' 단위 라벨이 같은 좌상단 자리에 겹쳐 그려졌었다)
+function labelBg(ctx,text,x,y,align){
+  const w=ctx.measureText(text).width, pad=3;
+  const left = align==='right' ? x-w-pad : (align==='center' ? x-w/2-pad : x-pad);
+  ctx.save(); ctx.fillStyle='rgba(251,250,245,.88)'; ctx.fillRect(left, y-10, w+pad*2, 13); ctx.restore();
+}
+
+// 1) 농도-시간
+function drawConc(){
+  const cv=document.getElementById(ns+'-concCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=34;
+  const hist=state.history;
+  const maxC=hist.length? Math.max(1.0, ...hist.map(h=>Math.max(h.cA,h.cB,h.cC)))*1.1 : 1.0;
+  gridLines(ctx,W,H,pad,4,maxC,v=>v.toFixed(2));
+  axes(ctx,W,H,pad);
+  if(hist.length<2){ ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';ctx.fillText('시간(초) →',W/2-20,H-6); return; }
+  const x=(i)=>pad+(W-6-pad)*i/(state.maxHistory-1);
+  const y=(c)=>(H-pad)-(H-pad-6)*(c/maxC);
+  const series=[['cA','#2f7dd1'],['cB','#1d9e75'],['cC','#d85a30']];
+  for(const [key,col] of series){
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+    hist.forEach((h,i)=>{ const X=x(i),Y=y(h[key]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+    ctx.stroke();
+    const last=hist[hist.length-1];
+    ctx.fillStyle=col;ctx.beginPath();
+    ctx.arc(x(hist.length-1),y(last[key]),3,0,Math.PI*2);ctx.fill();
+  }
+  xTimeTicks(ctx,W,H,pad,hist);
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('시간(초) →',W/2-20,H-6);
+  ctx.textAlign='right'; labelBg(ctx,'mol/L',W-6,14,'right'); ctx.fillText('mol/L',W-6,14); ctx.textAlign='left';
+}
+
+// 2) 속도 비교
+function drawRate(){
+  const cv=document.getElementById(ns+'-rateCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=34;
+  const hist=state.history;
+  const maxV=hist.length? Math.max(1e-6, ...hist.map(h=>Math.max(h.vf,h.vr)))*1.15 : 1e-6;
+  gridLines(ctx,W,H,pad,4,maxV,v=>v.toExponential(1));
+  axes(ctx,W,H,pad);
+  if(hist.length<2){ ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';ctx.fillText('시간(초) →',W/2-20,H-6); return; }
+  const x=(i)=>pad+(W-6-pad)*i/(state.maxHistory-1);
+  const y=(v)=>(H-pad)-(H-pad-6)*(v/maxV);
+  const series=[['vf','#2f7dd1'],['vr','#d85a30']];
+  for(const [key,col] of series){
+    ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();
+    hist.forEach((h,i)=>{const X=x(i),Y=y(h[key]);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+    ctx.stroke();
+  }
+  const last=hist[hist.length-1];
+  ctx.fillStyle='#6b5dd3';ctx.beginPath();
+  ctx.arc(x(hist.length-1),y(last.vf),3,0,Math.PI*2);ctx.fill();
+  xTimeTicks(ctx,W,H,pad,hist);
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('시간(초) →',W/2-20,H-6);
+  ctx.textAlign='right'; labelBg(ctx,'mol/(L·s)',W-6,14,'right'); ctx.fillText('mol/(L·s)',W-6,14); ctx.textAlign='left';
+}
+
+// 3) 자유에너지 패널 — 모드에 따라 G(ξ) 곡선 또는 ΔH/−TΔS/ΔG 분해
+function drawGibbs(){
+  if(state.gibbsMode==='decomp'){ drawGibbsDecomp(); return; }
+  drawGibbsCurve();
+}
+
+// 3a) 자유에너지 곡선 G(ξ) — 일반 화학량론 aA+bB⇌cC
+//     보존량 기준 고정 곡선. 점이 평형(곡선 최저점=Q=K)으로 굴러간다.
+function drawGibbsCurve(){
+  const cv=document.getElementById(ns+'-gibbsCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=26;
+  axes(ctx,W,H,pad);
+  const a=rxn.a, b=rxn.b, c=rxn.c;
+  // 보존량(원소 등가량): 반응이 진행돼도 불변
+  const NA=state.cA + (a/c)*state.cC;
+  const NB=b>0 ? state.cB + (b/c)*state.cC : Infinity;
+  // 진행도 ξ: [C]=c·ξ, [A]=NA−a·ξ, [B]=NB−b·ξ.  ξ ∈ [0, ximax]
+  const ximax=Math.min(NA/a, b>0?NB/b:Infinity);
+  if(!(ximax>1e-6)){ ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+    ctx.fillText('ξ (반응 진행도) →',W/2-44,H-6); return; }
+  const dG0=gibbsStdC(state.T), T=state.T;
+  const N=120, dxi=ximax/N;
+  const Qof=(xi)=>{
+    const cA=Math.max(NA-a*xi,1e-7), cC=Math.max(c*xi,1e-7);
+    const cB=b>0?Math.max(NB-b*xi,1e-7):1;
+    return Math.pow(cC,c)/(Math.pow(cA,a)*(b>0?Math.pow(cB,b):1));
+  };
+  // G(ξ) = ∫₀^ξ (ΔG° + RT lnQ) dξ'  (사다리꼴)
+  const pts=[{xi:0,G:0}];
+  let G=0, prev=dG0+R*T*Math.log(Qof(dxi*0.001));
+  for(let i=1;i<=N;i++){
+    const xi=dxi*i;
+    const dGrxn=dG0+R*T*Math.log(Qof(xi));
+    G+=0.5*(prev+dGrxn)*dxi; prev=dGrxn;
+    pts.push({xi,G});
+  }
+  const Gs=pts.map(p=>p.G);
+  const minG=Math.min(...Gs), maxG=Math.max(...Gs);
+  const span=(maxG-minG)||1;
+  const x=(xi)=>pad+(W-6-pad)*(xi/ximax);
+  const y=(g)=>(H-pad)-(H-pad-14)*((g-minG)/span);
+  // 곡선
+  ctx.strokeStyle='#6b5dd3';ctx.lineWidth=2;ctx.beginPath();
+  pts.forEach((p,i)=>{const X=x(p.xi),Y=y(p.G);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);});
+  ctx.stroke();
+  // 평형(곡선 최저점) 세로선
+  let kmin=0; for(let i=1;i<pts.length;i++) if(pts[i].G<pts[kmin].G) kmin=i;
+  ctx.strokeStyle='rgba(29,158,117,.5)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(x(pts[kmin].xi),8);ctx.lineTo(x(pts[kmin].xi),H-pad);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#0f6e56';ctx.font='9px sans-serif';
+  ctx.fillText('평형',x(pts[kmin].xi)+3,16);
+  // 현재 상태 점: ξ_now = [C]/c
+  const xiNow=Math.max(0,Math.min(ximax, state.cC/c));
+  const fi=xiNow/dxi; const i0=Math.max(0,Math.min(N,Math.floor(fi)));
+  const i1=Math.min(N,i0+1); const fr=fi-i0;
+  const gNow=pts[i0].G+(pts[i1].G-pts[i0].G)*fr;
+  ctx.fillStyle='#d85a30';ctx.beginPath();
+  ctx.arc(x(xiNow),y(gNow),5,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('ξ (반응 진행도) →',W/2-44,H-6);
+  labelBg(ctx,'G (상대값)',6,H-20,'left'); ctx.fillText('G (상대값)',6,H-20);
+}
+
+// 3b) 엔트로피 분해 — ΔG° = ΔH − TΔS 를 막대로. 온도에 따라 줄다리기.
+function drawGibbsDecomp(){
+  const cv=document.getElementById(ns+'-gibbsCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const T=state.T;
+  const dHkJ = rxn.dH/1000;          // ΔH (발열이면 음수)
+  const mTdSkJ = -T*rxn.dS/1000;     // −TΔS (ΔS<0이면 양수 → 정반응에 불리)
+  const dGkJ = (rxn.dH - T*rxn.dS)/1000; // ΔG° = ΔH − TΔS
+  const bars=[
+    {label:'ΔH', val:dHkJ, col:'#2f7dd1'},
+    {label:'−TΔS', val:mTdSkJ, col:'#1d9e75'},
+    {label:'ΔG°', val:dGkJ, col:'#6b5dd3'},
+  ];
+  const maxAbs=Math.max(...bars.map(b=>Math.abs(b.val)),5)*1.15;
+  // 상단(ΔS_전체 텍스트) / 하단(막대 라벨) 영역을 막대와 분리
+  const topPad=30, botPad=26;
+  const zeroY=(topPad+(H-botPad))/2;     // 0 기준선
+  const half=((H-botPad-topPad)/2)-12;   // 막대 최대 높이 (값 라벨 공간 확보)
+  const y=(v)=>zeroY-(v/maxAbs)*half;
+  // 0 기준선
+  ctx.strokeStyle='#dcd8cc';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(20,zeroY);ctx.lineTo(W-10,zeroY);ctx.stroke();
+  ctx.fillStyle='#b4b2a9';ctx.font='9px sans-serif';ctx.fillText('0',8,zeroY+3);
+  // 막대
+  const bw=46, gap=(W-30-bars.length*bw)/(bars.length+1);
+  bars.forEach((b,i)=>{
+    const bx=20+gap+i*(bw+gap);
+    const top=Math.min(zeroY,y(b.val)), h=Math.abs(y(b.val)-zeroY);
+    ctx.fillStyle=b.col;
+    ctx.fillRect(bx,top,bw,Math.max(h,1));
+    // 라벨 (하단 고정 영역)
+    ctx.fillStyle='#52605c';ctx.font='11px sans-serif';ctx.textAlign='center';
+    ctx.fillText(b.label,bx+bw/2,H-12);
+    // 값 (막대 끝 바깥, 영역 내)
+    ctx.fillStyle='#1a2e2a';ctx.font='bold 10px sans-serif';
+    const vy=b.val>=0 ? y(b.val)-4 : y(b.val)+12;
+    ctx.fillText(b.val.toFixed(1)+' kJ',bx+bw/2,vy);
+    ctx.textAlign='left';
+  });
+  // 전체 엔트로피(제2법칙): ΔS_univ = −ΔG°/T = ΔS_sys + ΔS_surr
+  const dSuniv = -(rxn.dH - T*rxn.dS)/T;  // J/mol·K
+  const spont = dGkJ<0;
+  ctx.fillStyle=spont?'#0f6e56':'#993c1d';
+  ctx.font='bold 10px sans-serif';ctx.textAlign='center';
+  ctx.fillText(`ΔS_전체 = ${dSuniv.toFixed(1)} J/K  →  ${spont?'정반응 자발 (ΔG°<0)':'정반응 비자발 (ΔG°>0)'}`,W/2,16);
+  ctx.textAlign='left';
+}
+//    온도↑ → 곡선이 낮고 넓어지며 Ea 너머 채움(반응 가능 분자)이 커진다.
+function mbDensity(T, vmax, N){
+  const a=molMass/(R*T);
+  const fs=[]; let area=0, prev=0;
+  for(let i=0;i<=N;i++){
+    const v=vmax*i/N;
+    const f=v*v*Math.exp(-a*v*v/2);
+    fs.push(f);
+    if(i>0) area+=0.5*(prev+f)*(vmax/N);
+    prev=f;
+  }
+  area=area||1;
+  return fs.map(f=>f/area);   // 확률밀도
+}
+// 임계속력 v*는 현재 Ea에 따라 동적. vmax는 충분한 여유로 고정(항상 v* 보임).
+function mbVStar(){ return Math.sqrt(2*eaEff()/molMass); }
+const MB_VMAX  = Math.sqrt(2*26000/0.030)*1.3;  // Ea 26kJ까지 수용하는 고정 범위
+const MB_YREF  = Math.max(...mbDensity(200, MB_VMAX, 140));
+
+function drawMB(){
+  const cv=document.getElementById(ns+'-mbCanvas');
+  const {ctx,W,H}=setupCanvas(cv,150);
+  const pad=26;
+  axes(ctx,W,H,pad);
+  const T=state.T;
+  const N=140;
+  const dens=mbDensity(T, MB_VMAX, N);
+  const vStar=Math.min(mbVStar(), MB_VMAX*0.98), vmax=MB_VMAX;
+  const x=(v)=>pad+(W-6-pad)*(v/vmax);
+  const y=(d)=>(H-pad)-(H-pad-10)*(d/MB_YREF);
+  // Ea 초과 영역 채움 (면적이 곧 반응 가능 분자 비율)
+  ctx.beginPath();
+  ctx.moveTo(x(vStar),H-pad);
+  let started=false;
+  for(let i=0;i<=N;i++){ const v=vmax*i/N; if(v>=vStar){ ctx.lineTo(x(v),y(dens[i])); started=true; } }
+  if(started){ ctx.lineTo(x(vmax),H-pad); ctx.closePath();
+    ctx.fillStyle='rgba(216,90,48,.18)'; ctx.fill(); }
+  // 곡선
+  ctx.strokeStyle='#1d9e75';ctx.lineWidth=2;ctx.beginPath();
+  for(let i=0;i<=N;i++){ const v=vmax*i/N; const X=x(v),Y=y(dens[i]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); }
+  ctx.stroke();
+  // Ea 임계선 (항상 표시)
+  ctx.strokeStyle='#d85a30';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(x(vStar),8);ctx.lineTo(x(vStar),H-pad);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#c24a1f';ctx.font='bold 10px sans-serif';
+  ctx.fillText('Ea',x(vStar)+3,16);
+  // x축 속력 눈금 (m/s)
+  ctx.fillStyle='#a8a49a';ctx.font='9px sans-serif';ctx.textAlign='center';
+  for(const f of [0,0.5,1.0]){
+    const v=vmax*f;
+    ctx.fillText(Math.round(v), x(v), H-pad+12);
+  }
+  ctx.textAlign='left';
+  ctx.fillStyle='#8a948f';ctx.font='10px sans-serif';
+  ctx.fillText('분자 속도 (m/s) →',W/2-30,H-6);
+}
+
+// ---------- 리드아웃 갱신 ----------
+function updateReadouts(){
+  document.getElementById(ns+'-cntA').textContent=nCount(state.cA);
+  document.getElementById(ns+'-cntB').textContent=nCount(state.cB);
+  document.getElementById(ns+'-cntC').textContent=nCount(state.cC);
+  document.getElementById(ns+'-roA').textContent=state.cA.toFixed(3);
+  document.getElementById(ns+'-roB').textContent=state.cB.toFixed(3);
+  document.getElementById(ns+'-roC').textContent=state.cC.toFixed(3);
+  const vf=vForward(state), vr=vReverse(state);
+  document.getElementById(ns+'-roVf').textContent=vf.toExponential(2);
+  document.getElementById(ns+'-roVr').textContent=vr.toExponential(2);
+  const eqFlag=document.getElementById(ns+'-eqFlag');
+  eqFlag.textContent = Math.abs(vf-vr) < Math.max(vf,vr)*0.03 + 1e-9 ? '≈ 평형 도달' : '';
+  document.getElementById(ns+'-roDG').textContent=(deltaG(state)/1000).toFixed(2)+' kJ';
+  // ξ(진행도): 자유에너지 패널과 동일 — 보존량 기준 정규화
+  const NA=state.cA+(rxn.a/rxn.c)*state.cC;
+  const NB=rxn.b>0?state.cB+(rxn.b/rxn.c)*state.cC:Infinity;
+  const ximax=Math.min(NA/rxn.a, rxn.b>0?NB/rxn.b:Infinity);
+  const xiNow = ximax>1e-6 ? (state.cC/rxn.c)/ximax : 0;
+  document.getElementById(ns+'-roXi').textContent=xiNow.toFixed(2);
+  // Ea 초과 비율: kf 계산에도 쓰이는 것과 동일한 fracAboveEa()를 재사용
+  // (예전에는 여기서 따로 적분해 kf의 아레니우스 근사값과 서로 어긋났었다)
+  const above=fracAboveEa(state.T);
+  document.getElementById(ns+'-roFrac').textContent=(above*100).toPrecision(2)+' %';
+  document.getElementById(ns+'-roKf').textContent=kf(state.T).toExponential(2);
+
+  // ΔG°/K 실시간 배지
+  // ΔG°는 문헌 비교용 표준값(1bar 기준, Kp와 짝)을 그대로 보여주고,
+  // K는 실제 반응(몰농도 기준)에 쓰이는 Kc를 보여준다 — 기체반응(ΔN≠0)에서는 Kp≠Kc.
+  const dG0 = gibbsStd(state.T);      // J/mol (문헌 비교용 ΔG°_p, Q 무관)
+  const Kval = KeqC(state.T);         // 농도 기준 평형상수 Kc (실제 시뮬레이션에 사용)
+  const dG0kJ = dG0/1000;
+  const dgEl=document.getElementById(ns+'-gkDG'), kEl=document.getElementById(ns+'-gkK');
+  dgEl.textContent = dG0kJ.toFixed(2);
+  dgEl.style.color = dG0kJ<0 ? '#0f6e56' : '#993c1d';   // 음수=초록(자발), 양수=빨강(비자발)
+  kEl.textContent = (Kval>=1000||Kval<0.01) ? Kval.toExponential(2) : Kval.toFixed(2);
+}
+
+// ---------- 메인 루프 ----------
+let lastTs=performance.now();
+let accum=0;
+const ctl={stopped:false};  // 패널을 닫으면 true — 다음 프레임부터 루프를 멈춰 리소스를 정리한다
+function loop(ts){
+  if(ctl.stopped) return;
+  const realDt=Math.min((ts-lastTs)/1000, 0.05);
+  lastTs=ts;
+  if(state.running){
+    // 입자 애니메이션 (매 프레임)
+    updateParticles(realDt);
+    // 반응 ODE (고정 스텝 누적)
+    accum+=realDt;
+    const fixed=0.016;
+    while(accum>=fixed){
+      stepReaction(fixed*4);    // 반응 속도 가시성 위해 4배 시간배율
+      state.t+=fixed;
+      accum-=fixed;
+    }
+    // 히스토리 기록 (프레임마다)
+    state.history.push({
+      t:state.t, cA:state.cA, cB:state.cB, cC:state.cC,
+      vf:vForward(state), vr:vReverse(state)
+    });
+    if(state.history.length>state.maxHistory) state.history.shift();
+    processParticleEvents();
+  }
+  drawSim(realDt);
+  drawConc();
+  drawRate();
+  drawGibbs();
+  drawMB();
+  updateReadouts();
+  requestAnimationFrame(loop);
+}
+
+// ---------- 초기화 ----------
+function initSimCanvas(){
+  const cv=document.getElementById(ns+'-simCanvas');
+  sim.canvas=cv;
+  const dpr=window.devicePixelRatio||1;
+  const cssW=cv.clientWidth;
+  const cssH=Math.round(Math.min(300, Math.max(200, cssW*0.34)));
+  cv.width=Math.round(cssW*dpr);
+  cv.height=Math.round(cssH*dpr);
+  cv.style.height=cssH+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  sim.ctx=ctx; sim.W=cssW; sim.H=cssH; sim.dpr=dpr;
+}
+
+function resetAll(){
+  state.T=300; state.t=0;
+  state.cA=rxn.init.A; state.cB=rxn.init.B; state.cC=rxn.init.C;
+  state.V=1.0; state.catMul=1.0;
+  state.history=[];
+  sim.particles=[];
+  document.getElementById(ns+'-tempSlider').value=300;
+  document.getElementById(ns+'-tempVal').textContent=300;
+  document.getElementById(ns+'-catSlider').value=1.0;
+  document.getElementById(ns+'-catVal').textContent='1.00';
+  document.getElementById(ns+'-volSlider').value=1.0;
+  document.getElementById(ns+'-volVal').textContent='1.00';
+  syncParticles();
+}
+
+// 계수 표기: 1이면 생략 (예: 3H₂, N₂)
+function coefStr(n,name){ return (n===1?'':n)+name; }
+// 반응식 문자열
+function rxnEquation(){
+  const L=[coefStr(rxn.a,rxn.names.A)];
+  if(rxn.b>0) L.push(coefStr(rxn.b,rxn.names.B));
+  return L.join(' + ')+' ⇌ '+coefStr(rxn.c,rxn.names.C);
+}
+// 종 이름·라벨 일괄 갱신 (B=0이면 B 요소 숨김)
+function refreshLabels(){
+  const eq=rxnEquation();
+  document.getElementById(ns+'-rxnEq').textContent=eq;
+  document.getElementById(ns+'-rxnNote').textContent=rxn.note;
+  document.getElementById(ns+'-legA').textContent=rxn.names.A;
+  document.getElementById(ns+'-legB').textContent=rxn.names.B;
+  document.getElementById(ns+'-legC').textContent=rxn.names.C;
+  document.getElementById(ns+'-rlA').textContent='['+rxn.names.A+']';
+  document.getElementById(ns+'-rlB').textContent='['+rxn.names.B+']';
+  document.getElementById(ns+'-rlC').textContent='['+rxn.names.C+']';
+  document.getElementById(ns+'-lblAddA').textContent=rxn.names.A+' 추가';
+  document.getElementById(ns+'-lblAddB').textContent=rxn.names.B+' 추가';
+  document.getElementById(ns+'-lblAddC').textContent=rxn.names.C+' 추가';
+  const showB = rxn.b>0;
+  document.getElementById(ns+'-legWrapB').style.display = showB?'':'none';
+  document.getElementById(ns+'-roWrapB').style.display = showB?'':'none';
+  document.getElementById(ns+'-btnAddB').style.display = showB?'':'none';
+  // 입력칸 동기화
+  document.getElementById(ns+'-inpDH').value=(rxn.dH/1000);
+  document.getElementById(ns+'-inpDS').value=rxn.dS;
+  document.getElementById(ns+'-inpEa').value=(rxn.Ea/1000);
+}
+
+// 프리셋 적용
+function applyPreset(key){
+  const p=PRESETS[key];
+  Object.assign(rxn, p);
+  rxn.init={A:p.init.A,B:p.init.B,C:p.init.C};
+  rxn.names={A:p.names.A,B:p.names.B,C:p.names.C};
+  rxn.states={A:'g',B:'g',C:'g'};   // 내장 프리셋은 전부 기체상 반응
+  refreshLabels();
+  resetAll();
+}
+
+// ---------- 이벤트 ----------
+document.getElementById(ns+'-tempSlider').addEventListener('input',e=>{
+  state.T=+e.target.value;
+  document.getElementById(ns+'-tempVal').textContent=state.T;
+});
+document.getElementById(ns+'-btnAddA').addEventListener('click',()=>{ state.cA+=0.4; sim.injectA+=0.4; });
+document.getElementById(ns+'-btnAddB').addEventListener('click',()=>{ state.cB+=0.4; sim.injectB+=0.4; });
+document.getElementById(ns+'-btnAddC').addEventListener('click',()=>{ state.cC+=0.4; sim.injectC+=0.4; });
+document.getElementById(ns+'-btnReset').addEventListener('click',resetAll);
+document.getElementById(ns+'-presetSel').addEventListener('change',e=>{
+  const key=e.target.value;
+  const isCustom = key==='custom';
+  document.getElementById(ns+'-customRow').style.display = isCustom?'flex':'none';
+  if(isCustom){
+    // 현재 반응값으로 입력칸을 채운 뒤 적용
+    document.getElementById(ns+'-cfA').value=rxn.a;
+    document.getElementById(ns+'-cfB').value=rxn.b;
+    document.getElementById(ns+'-cfC').value=rxn.c;
+    document.getElementById(ns+'-nmA').value=rxn.names.A;
+    document.getElementById(ns+'-nmB').value=rxn.names.B||'B';
+    document.getElementById(ns+'-nmC').value=rxn.names.C;
+    document.getElementById(ns+'-ic0').value=rxn.init.A;
+    document.getElementById(ns+'-ic1').value=rxn.init.B;
+    document.getElementById(ns+'-ic2').value=rxn.init.C;
+    syncCustomBFields();
+    applyCustom();
+  } else {
+    applyPreset(key);
+  }
+});
+
+// 사용자 정의 반응 적용
+function applyCustom(){
+  const clampInt=(id,lo,hi,def)=>{ let v=parseInt(document.getElementById(ns+'-'+id).value,10); if(isNaN(v))v=def; return Math.max(lo,Math.min(hi,v)); };
+  const clampNum=(id,lo,hi,def)=>{ let v=parseFloat(document.getElementById(ns+'-'+id).value); if(isNaN(v))v=def; return Math.max(lo,Math.min(hi,v)); };
+  const nm=(id,def)=>{ const s=(document.getElementById(ns+'-'+id).value||'').trim(); return s||def; };
+  const a=clampInt('cfA',1,4,1), b=clampInt('cfB',0,4,1), c=clampInt('cfC',1,4,1);
+  rxn.a=a; rxn.b=b; rxn.c=c;
+  rxn.names={A:nm('nmA','A'), B:nm('nmB','B'), C:nm('nmC','C')};
+  let iA=clampNum('ic0',0,3,1), iB=b>0?clampNum('ic1',0,3,1):0, iC=clampNum('ic2',0,3,0);
+  if(iA+iB+iC<0.05) iA=1; // 모두 0이면 기본값
+  rxn.init={A:iA,B:iB,C:iC};
+  // ΔH/ΔS/Ea는 현재 입력칸 값 사용
+  let dHv=parseFloat(document.getElementById(ns+'-inpDH').value); if(!isNaN(dHv)){ dHv=Math.max(-500,Math.min(500,dHv)); rxn.dH=dHv*1000; }
+  let dSv=parseFloat(document.getElementById(ns+'-inpDS').value); if(!isNaN(dSv)){ dSv=Math.max(-500,Math.min(500,dSv)); rxn.dS=dSv; }
+  let Eav=parseFloat(document.getElementById(ns+'-inpEa').value); if(!isNaN(Eav)){ Eav=Math.max(4,Math.min(26,Eav)); rxn.Ea=Eav*1000; }
+  rxn.A_pre=120;
+  rxn.note='직접 입력한 반응. 계수·이름·초기농도·열역학값을 자유롭게 설정하세요.';
+  // 이름이 DB에 있는(상태가 특정되는) 물질이면 자동으로 상태(g/s/l/aq)를 인식해
+  // 고체·순수액체는 평형/속도식 계산에서 자동으로 제외되도록 한다.
+  // (DB자동계산 버튼을 안 눌러도 반응 적용만으로 상태 인식은 되도록 하기 위함)
+  const detectState=(nm)=>{ const sp=lookupSpecies(nm); return (sp && !sp.ambiguous) ? sp.state : 'g'; };
+  rxn.states={A:detectState(rxn.names.A), B:(b>0?detectState(rxn.names.B):'g'), C:detectState(rxn.names.C)};
+  refreshLabels();
+  resetAll();
+}
+document.getElementById(ns+'-btnApplyCustom').addEventListener('click',applyCustom);
+// ---------- 화합물 DB 자동입력 ----------
+// 사용자가 입력한 물질명을 SPECIES_DB에서 찾아 표준생성엔탈피/표준엔트로피로
+// 반응엔탈피·반응엔트로피를 계산해 채운다: ΔH°rxn = ΣHf(생성물) − ΣHf(반응물)
+const PHASE_LABEL = {g:'기체', s:'고체', l:'액체', aq:'수용액'};
+function dbAutoFill(){
+  const note=document.getElementById(ns+'-dbFillNote');
+  const nmAv=document.getElementById(ns+'-nmA').value, nmBv=document.getElementById(ns+'-nmB').value, nmCv=document.getElementById(ns+'-nmC').value;
+  const a=parseInt(document.getElementById(ns+'-cfA').value,10)||1;
+  const b=parseInt(document.getElementById(ns+'-cfB').value,10)||0;
+  const c=parseInt(document.getElementById(ns+'-cfC').value,10)||1;
+  const spA=lookupSpecies(nmAv), spC=lookupSpecies(nmCv);
+  const spB=b>0?lookupSpecies(nmBv):{dHf:0,S:0,state:'g'};
+
+  // 상태가 여러 개라 모호한 경우(예: "Sn"만 입력) 어떤 표기를 쓰면 되는지 안내하고 중단
+  const ambiguous=[[spA,nmAv],[spB,nmBv],[spC,nmCv]].filter(([sp])=>sp && sp.ambiguous);
+  if(ambiguous.length){
+    const parts = ambiguous.map(([sp,nm])=>`"${nm}" → ${sp.options.join(' / ')} 중 하나로 입력`);
+    note.textContent = '상태가 여러 개라 특정할 수 없습니다: '+parts.join('; ');
+    note.style.color = '#993c1d';
+    return;
+  }
+  const missing=[];
+  if(!spA) missing.push(nmAv||'A');
+  if(b>0 && !spB) missing.push(nmBv||'B');
+  if(!spC) missing.push(nmCv||'C');
+  if(missing.length){
+    note.textContent = 'DB에 없는 물질: '+missing.join(', ')+' — 화학식을 정확히 입력하세요 (예: N₂, H₂O, NH₃, CaCO₃(s)).';
+    note.style.color = '#993c1d';
+    return;
+  }
+  let dH = c*spC.dHf - a*spA.dHf - (b>0? b*spB.dHf:0);
+  let dS = c*spC.S   - a*spA.S   - (b>0? b*spB.S:0);
+  dH = Math.max(-500,Math.min(500,dH));
+  dS = Math.max(-500,Math.min(500,dS));
+  document.getElementById(ns+'-inpDH').value = dH.toFixed(2);
+  document.getElementById(ns+'-inpDS').value = dS.toFixed(2);
+  rxn.dH = dH*1000; rxn.dS = dS;
+  // 상태(g/s/l/aq)도 함께 기록 — 고체·순수액체는 이후 평형/속도식 계산에서 활성도=1로 제외된다
+  rxn.states = {A:spA.state, B:(b>0?spB.state:'g'), C:spC.state};
+  const condensed = [['A',spA],['B',b>0?spB:null],['C',spC]]
+    .filter(([,sp])=>sp && isCondensed(sp.state)).map(([k])=>k);
+  let msg = '문헌 표준생성열·표준엔트로피(298K)로 계산됨: ΔH°='+dH.toFixed(1)+' kJ/mol, ΔS°='+dS.toFixed(1)+' J/mol·K'
+    +' ['+['A','B','C'].filter(k=>k!=='B'||b>0).map(k=>k+':'+PHASE_LABEL[rxn.states[k]]).join(', ')+']';
+  if(condensed.length) msg += ' — '+condensed.join(', ')+'는 고체/액체라 평형·속도식 농도항에서 제외(활성도=1)됩니다.';
+  note.textContent = msg;
+  note.style.color = '#0f6e56';
+}
+document.getElementById(ns+'-btnDbFill').addEventListener('click', dbAutoFill);
+// B 계수가 0이면(단일 반응물 분해) [B] 초기농도·이름 입력칸을 비활성화해 혼동을 막는다.
+// (수정 전에는 계수를 0으로 바꿔도 이 입력칸들이 계속 활성 상태로 남아 값을 넣어도 무시되었다)
+function syncCustomBFields(){
+  const b=parseInt(document.getElementById(ns+'-cfB').value,10)||0;
+  const disabled = b<=0;
+  const nmB=document.getElementById(ns+'-nmB'), ic1=document.getElementById(ns+'-ic1');
+  nmB.disabled=disabled; ic1.disabled=disabled;
+  nmB.style.opacity=disabled?'0.4':'1'; ic1.style.opacity=disabled?'0.4':'1';
+}
+document.getElementById(ns+'-cfB').addEventListener('input', syncCustomBFields);
+syncCustomBFields();
+document.getElementById(ns+'-inpDH').addEventListener('input',e=>{ let v=parseFloat(e.target.value); if(!isNaN(v)){ v=Math.max(-500,Math.min(500,v)); rxn.dH=v*1000; } });
+document.getElementById(ns+'-inpDS').addEventListener('input',e=>{ let v=parseFloat(e.target.value); if(!isNaN(v)){ v=Math.max(-500,Math.min(500,v)); rxn.dS=v; } });
+document.getElementById(ns+'-inpEa').addEventListener('input',e=>{ let v=parseFloat(e.target.value); if(!isNaN(v)){ v=Math.max(4,Math.min(26,v)); rxn.Ea=v*1000; } });
+document.getElementById(ns+'-catSlider').addEventListener('input',e=>{
+  state.catMul=+e.target.value;
+  document.getElementById(ns+'-catVal').textContent=state.catMul.toFixed(2);
+});
+document.getElementById(ns+'-volSlider').addEventListener('input',e=>{
+  const newV=+e.target.value;
+  const ratio=state.V/newV;            // 농도 = n/V → 부피 ratio로 농도 스케일 (분자수 불변)
+  state.cA*=ratio; state.cB*=ratio; state.cC*=ratio;
+  state.V=newV;
+  document.getElementById(ns+'-volVal').textContent=newV.toFixed(2);
+  // 입자를 새 박스 경계 안으로 가둠 (개수는 그대로)
+  const bb=boxBounds();
+  for(const p of sim.particles){
+    p.x=Math.max(bb.x0+RADIUS,Math.min(bb.x1-RADIUS,p.x));
+    p.y=Math.max(bb.y0+RADIUS,Math.min(bb.y1-RADIUS,p.y));
+  }
+});
+document.getElementById(ns+'-gibbsToggle').addEventListener('click',()=>{
+  const decomp = state.gibbsMode!=='decomp';
+  state.gibbsMode = decomp?'decomp':'curve';
+  document.getElementById(ns+'-gibbsTitle').innerHTML = decomp
+    ? '엔트로피 분해 (ΔG° = ΔH − TΔS)' : '자유에너지 곡선 (G vs ξ)';
+  document.getElementById(ns+'-gibbsDesc').textContent = decomp
+    ? '엔탈피(ΔH)와 엔트로피(−TΔS)의 줄다리기가 반응 방향을 정합니다. 온도를 바꿔보세요.'
+    : '시스템은 자유에너지가 최소인 지점(평형)으로 굴러갑니다.';
+  document.getElementById(ns+'-gibbsToggle').innerHTML = decomp ? '◂ G 곡선' : '엔트로피 분해 ▸';
+  document.getElementById(ns+'-gibbsReadout').style.display = decomp?'none':'flex';
+});
+document.getElementById(ns+'-btnPlay').addEventListener('click',()=>{
+  state.running=!state.running;
+  document.getElementById(ns+'-playLabel').textContent=state.running?'일시정지':'재생';
+  document.getElementById(ns+'-statusText').textContent=state.running?'시뮬레이션 실행 중':'일시정지됨';
+  document.getElementById(ns+'-statusDot').style.background=state.running?'var(--B)':'var(--ink-faint)';
+});
+
+window.addEventListener('resize',()=>{ initSimCanvas(); });
+
+// ---------- URL 상태 공유 ----------
+// 이 인스턴스(ns)의 현재 반응/조건을 ns 접두사를 붙인 파라미터 객체로 반환.
+// (좌/우 두 반응을 한 링크에 같이 담기 위해 전역 공유 버튼이 양쪽 인스턴스의
+//  getParams()를 모아 하나의 URL로 합친다 — 패널마다 따로 공유 버튼을 두지 않음)
+function getParams(){
+  const P={};
+  P[ns+'_a']=rxn.a; P[ns+'_b']=rxn.b; P[ns+'_c']=rxn.c;
+  P[ns+'_nA']=rxn.names.A; P[ns+'_nB']=rxn.names.B||''; P[ns+'_nC']=rxn.names.C;
+  P[ns+'_dH']=(rxn.dH/1000).toFixed(2);
+  P[ns+'_dS']=rxn.dS.toFixed(2);
+  P[ns+'_Ea']=(rxn.Ea/1000).toFixed(2);
+  P[ns+'_iA']=rxn.init.A.toFixed(2); P[ns+'_iB']=rxn.init.B.toFixed(2); P[ns+'_iC']=rxn.init.C.toFixed(2);
+  P[ns+'_T']=state.T; P[ns+'_V']=state.V.toFixed(2); P[ns+'_cat']=state.catMul.toFixed(2);
+  return P;
+}
+// 공유 URL 쿼리스트링에서 이 인스턴스(ns) 몫만 복원 (있으면 true 반환)
+function applyParamsFromURL(){
+  const p=new URLSearchParams(location.search);
+  if(!p.has(ns+'_a')) return false;
+  const num=(k,def)=>{ const v=parseFloat(p.get(ns+'_'+k)); return isNaN(v)?def:v; };
+  rxn.a=Math.max(1,Math.min(4,Math.round(num('a',1))));
+  rxn.b=Math.max(0,Math.min(4,Math.round(num('b',1))));
+  rxn.c=Math.max(1,Math.min(4,Math.round(num('c',1))));
+  rxn.names={A:p.get(ns+'_nA')||'A', B:p.get(ns+'_nB')||'', C:p.get(ns+'_nC')||'C'};
+  rxn.dH=Math.max(-500,Math.min(500,num('dH',-15)))*1000;
+  rxn.dS=Math.max(-500,Math.min(500,num('dS',-30)));
+  rxn.Ea=Math.max(4,Math.min(26,num('Ea',12)))*1000;
+  rxn.A_pre=120;
+  rxn.init={A:num('iA',1), B:rxn.b>0?num('iB',1):0, C:num('iC',0)};
+  rxn.note='공유된 링크에서 불러온 사용자 정의 반응입니다.';
+  // 이름이 DB에서 상태가 특정되는 물질이면 자동 인식, 아니면 기체로 간주(기존 동작과 동일)
+  const detectStateURL=(nm)=>{ const sp=lookupSpecies(nm); return (sp && !sp.ambiguous) ? sp.state : 'g'; };
+  rxn.states={A:detectStateURL(rxn.names.A), B:(rxn.b>0?detectStateURL(rxn.names.B):'g'), C:detectStateURL(rxn.names.C)};
+  state.T=Math.max(200,Math.min(600,num('T',300)));
+  state.V=Math.max(0.5,Math.min(2.0,num('V',1.0)));
+  state.catMul=Math.max(0.5,Math.min(1.5,num('cat',1.0)));
+  document.getElementById(ns+'-presetSel').value='custom';
+  document.getElementById(ns+'-customRow').style.display='flex';
+  document.getElementById(ns+'-cfA').value=rxn.a; document.getElementById(ns+'-cfB').value=rxn.b; document.getElementById(ns+'-cfC').value=rxn.c;
+  document.getElementById(ns+'-nmA').value=rxn.names.A; document.getElementById(ns+'-nmB').value=rxn.names.B||'B'; document.getElementById(ns+'-nmC').value=rxn.names.C;
+  document.getElementById(ns+'-ic0').value=rxn.init.A; document.getElementById(ns+'-ic1').value=rxn.init.B; document.getElementById(ns+'-ic2').value=rxn.init.C;
+  syncCustomBFields();
+  document.getElementById(ns+'-tempSlider').value=state.T; document.getElementById(ns+'-tempVal').textContent=state.T;
+  document.getElementById(ns+'-volSlider').value=state.V; document.getElementById(ns+'-volVal').textContent=state.V.toFixed(2);
+  document.getElementById(ns+'-catSlider').value=state.catMul; document.getElementById(ns+'-catVal').textContent=state.catMul.toFixed(2);
+  return true;
+}
+
+// 시작
+initSimCanvas();
+document.getElementById(ns+'-presetSel').value=defaultPresetKey;
+if(!applyParamsFromURL()){
+  state.cA=rxn.init.A; state.cB=rxn.init.B; state.cC=rxn.init.C;
+}
+refreshLabels();
+syncParticles();
+requestAnimationFrame(loop);
+
+return {ns, getParams, stop(){ ctl.stopped=true; }};
+}
+
+// ---------- 반응 인스턴스 생성 ----------
+// 기본값: 반응 1(왼쪽)만 표시. 사용자가 원할 때만 "+ 두 번째 반응 추가"로 반응 2를 띄운다.
+document.getElementById('col-l').innerHTML = panelHTML('l','반응 1','var(--A)');
+const instances = [ createSim('l','generic','var(--A)','반응 1') ];
+let instR = null;
+
+function addPanelR(){
+  if(instR) return;
+  document.getElementById('col-r').innerHTML = panelHTML('r','반응 2','var(--C)');
+  // 패널 제목 옆에 닫기(✕) 버튼을 붙여 언제든 다시 1개짜리 화면으로 되돌릴 수 있게 한다
+  const heading = document.querySelector('#col-r .panel-heading');
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕ 닫기';
+  closeBtn.style.cssText = 'font-size:11px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink-soft);border-radius:7px;padding:4px 9px;';
+  closeBtn.addEventListener('click', removePanelR);
+  heading.appendChild(closeBtn);
+  instR = createSim('r','endo','var(--C)','반응 2');
+  instances.push(instR);
+  document.getElementById('dualGrid').classList.add('two-col');
+}
+function removePanelR(){
+  if(!instR) return;
+  instR.stop();                          // 반응2의 애니메이션 루프 정지 (리소스 정리)
+  const idx = instances.indexOf(instR);
+  if(idx>=0) instances.splice(idx,1);
+  instR = null;
+  document.getElementById('col-r').innerHTML = '<div class="add-panel-card"><button id="btnAddPanelR">+ 두 번째 반응 추가해서 비교하기</button></div>';
+  document.getElementById('btnAddPanelR').addEventListener('click', addPanelR);
+  document.getElementById('dualGrid').classList.remove('two-col');
+}
+document.getElementById('btnAddPanelR').addEventListener('click', addPanelR);
+
+// 공유 링크에 반응2(r_...) 파라미터가 들어있으면 처음부터 두 패널을 모두 보여준다
+if(new URLSearchParams(location.search).has('r_a')) addPanelR();
+
+// ---------- 공유 링크 (양쪽 반응 상태를 한 URL에 함께 담는다) ----------
+document.getElementById('btnShare').addEventListener('click', async ()=>{
+  const p = new URLSearchParams();
+  for(const inst of instances){
+    const kv = inst.getParams();
+    Object.keys(kv).forEach(k=>p.set(k, kv[k]));
+  }
+  const url = location.origin+location.pathname+'?'+p.toString();
+  const btn = document.getElementById('btnShare');
+  const orig = btn.innerHTML;
+  try{
+    await navigator.clipboard.writeText(url);
+    btn.innerHTML='✓ 복사됨 (반응 1·2 모두 포함)';
+  }catch(e){
+    window.prompt('아래 링크를 복사하세요 (반응 1·2 모두 포함):', url);
+  }
+  setTimeout(()=>{ btn.innerHTML=orig; }, 2200);
+});
+
+</script>
+</body>
+</html>
